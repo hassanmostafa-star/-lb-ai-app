@@ -11,10 +11,10 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Java
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
@@ -22,11 +22,12 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.19.x'
           channel: 'stable'
 
-      - name: Install Dependencies
-        run: flutter pub get
+      - name: Initialize Android Platform Structure
+        run: |
+          flutter create --platforms=android --org=com.lbai.app .
+          flutter pub get
 
       - name: Build Android APK
         run: flutter build apk --release
@@ -34,13 +35,13 @@ jobs:
       - name: Build Android App Bundle (AAB for Google Play)
         run: flutter build appbundle --release
 
-      - name: Upload APK Artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: LB-AI-App-APK
           path: build/app/outputs/flutter-apk/app-release.apk
 
-      - name: Upload AAB Artifact
+      - name: Upload AAB (Google Play)
         uses: actions/upload-artifact@v4
         with:
           name: LB-AI-GooglePlay-AAB

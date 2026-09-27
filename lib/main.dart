@@ -36,7 +36,7 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
   final List<Map<String, String>> _messages = [
     {
       'role': 'assistant',
-      'text': 'أهلاً بك! أنا LB AI، محرك الذكاء الفائق متعدد القدرات. تفضل بسؤالي عن أي شيء وسأجيبك فوراً.'
+      'text': 'أهلاً بك! أنا LB AI، محرك الذكاء الفائق المستقل. تفضل بسؤالي عن أي موضوع، مقال، برمجة، أو استفسار وسأجيبك فوراً.'
     }
   ];
   bool _isTyping = false;
@@ -54,51 +54,41 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
   }
 
   Future<void> _sendMessage() async {
-    final text = _msgController.text.trim();
-    if (text.isEmpty) return;
+    final userText = _msgController.text.trim();
+    if (userText.isEmpty) return;
 
     setState(() {
-      _messages.add({'role': 'user', 'text': text});
+      _messages.add({'role': 'user', 'text': userText});
       _isTyping = true;
       _msgController.clear();
     });
     _scrollToBottom();
 
     try {
-      // الاتصال بمحرك ذكاء اصطناعي حقيقي ومباشر
-      final response = await http.post(
-        Uri.parse('https://openrouter.ai/api/v1/chat/completions'),
-        headers: {
-          'Content-Type': 'application/json; charset=utf-8',
-          'Authorization': 'Bearer sk-or-v1-guest-mode',
-        },
-        body: jsonEncode({
-          'model': 'meta-llama/llama-3.2-3b-instruct:free',
-          'messages': [
-            {
-              'role': 'system',
-              'content': 'أنت LB AI - مساعد ذكاء اصطناعي فائق الذكاء، راقٍ ومميز. تجيب باللغة العربية بطلاقة ودقة عالية، واسمك دائماً LB AI.'
-            },
-            ..._messages.map((m) => {
-              'role': m['role'] == 'user' ? 'user' : 'assistant',
-              'content': m['text']
-            }).toList()
-          ]
-        }),
-      ).timeout(const Duration(seconds: 15));
+      // الاتصال بسيرفر الذكاء الاصطناعي الحقيقي المباشر بدون قيود
+      final encodedPrompt = Uri.encodeComponent(
+        'أنت LB AI - مساعد ذكاء اصطناعي فائق الذكاء ومتميز. أجب بتفصيل ودقة وبأسلوب راقٍ باللغة العربية على هذا الطلب: $userText',
+      );
+
+      final url = Uri.parse(
+        'https://text.pollinations.ai/$encodedPrompt?model=openai&system=أنت%20LB%20AI%20الذكي',
+      );
+
+      final response = await http.get(url).timeout(const Duration(seconds: 25));
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(utf8.decode(response.bodyBytes));
-        final reply = data['choices'][0]['message']['content'] ?? 'تمت المعالجة بنجاح.';
-        setState(() {
-          _messages.add({'role': 'assistant', 'text': reply.trim()});
-        });
-      } else {
-        // رد احتياطي ذكي وديناميكي في حال انشغال السيرفر
+        final reply = utf8.decode(response.bodyBytes);
         setState(() {
           _messages.add({
             'role': 'assistant',
-            'text': 'أهلاً بك! لقد استلمت رسالتك بخصوص: "$text". محرك LB AI يعمل الآن بكامل طاقته ومستعد لمساعدتك.'
+            'text': reply.isNotEmpty ? reply.trim() : 'تمت معالجة طلبك بنجاح بواسطة LB AI.',
+          });
+        });
+      } else {
+        setState(() {
+          _messages.add({
+            'role': 'assistant',
+            'text': 'حدث تأخير في استجابة الخادم السحابي، يرجى إعادة إرسال السؤال مرة أخرى.',
           });
         });
       }
@@ -106,7 +96,7 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
       setState(() {
         _messages.add({
           'role': 'assistant',
-          'text': 'أهلاً بك! أنا LB AI، استلمت سؤالك حول: "$text". أنا جاهز ومتاح دائماً لخدمتك!'
+          'text': 'عذراً، يرجى التأكد من اتصال الإنترنت والمحاولة ثانية.',
         });
       });
     } finally {
@@ -183,7 +173,7 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
                     margin: const EdgeInsets.only(bottom: 12),
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     constraints: BoxConstraints(
-                      maxWidth: MediaQuery.of(context).size.width * 0.82,
+                      maxWidth: MediaQuery.of(context).size.width * 0.85,
                     ),
                     decoration: BoxDecoration(
                       color: isUser ? const Color(0xFF00E5FF) : const Color(0xFF131B2E),
@@ -209,7 +199,7 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
                       style: TextStyle(
                         color: isUser ? Colors.black : Colors.white,
                         fontSize: 15,
-                        height: 1.4,
+                        height: 1.5,
                       ),
                     ),
                   ),
@@ -232,7 +222,7 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'LB AI يفكّر ويكتب لك...',
+                    'LB AI يفكّر ويكتب الإجابة الآن...',
                     style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
                   ),
                 ],

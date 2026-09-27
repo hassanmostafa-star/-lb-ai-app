@@ -24,25 +24,30 @@ jobs:
         with:
           channel: 'stable'
 
-      - name: Initialize Android
+      - name: Create Clean Android App & Enable Internet
         run: |
           flutter create --platforms=android --org=com.lbai.app .
+          python3 -c '
+          path = "android/app/src/main/AndroidManifest.xml"
+          with open(path, "r") as f:
+              content = f.read()
+          perms = """
+              <uses-permission android:name="android.permission.INTERNET"/>
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+          """
+          if "android.permission.INTERNET" not in content:
+              content = content.replace("<application", perms + "\n    <application")
+              content = content.replace("<application", "<application android:usesCleartextTraffic=\"true\"")
+              with open(path, "w") as f:
+                  f.write(content)
+          '
           flutter pub get
 
       - name: Build Android APK
         run: flutter build apk --release
-
-      - name: Build Android App Bundle (AAB for Google Play)
-        run: flutter build appbundle --release
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: LB-AI-App-APK
           path: build/app/outputs/flutter-apk/app-release.apk
-
-      - name: Upload AAB (Google Play)
-        uses: actions/upload-artifact@v4
-        with:
-          name: LB-AI-GooglePlay-AAB
-          path: build/app/outputs/bundle/release/app-release.aab

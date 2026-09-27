@@ -3,33 +3,21 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const LbAiApp());
+  runApp(const MaterialApp(
+    title: 'LB AI',
+    debugShowCheckedModeBanner: false,
+    home: LbAiApp(),
+  ));
 }
 
-class LbAiApp extends StatelessWidget {
+class LbAiApp extends StatefulWidget {
   const LbAiApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'LB AI',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF04060C),
-      ),
-      home: const LbAiMainScreen(),
-    );
-  }
+  State<LbAiApp> createState() => _LbAiAppState();
 }
 
-class LbAiMainScreen extends StatefulWidget {
-  const LbAiMainScreen({super.key});
-
-  @override
-  State<LbAiMainScreen> createState() => _LbAiMainScreenState();
-}
-
-class _LbAiMainScreenState extends State<LbAiMainScreen> {
+class _LbAiAppState extends State<LbAiApp> {
   late final WebViewController _controller;
   bool _isLoading = true;
 
@@ -41,10 +29,18 @@ class _LbAiMainScreenState extends State<LbAiMainScreen> {
       ..setBackgroundColor(const Color(0xFF04060C))
       ..setNavigationDelegate(
         NavigationDelegate(
-          onPageFinished: (url) {
+          onPageStarted: (String url) {
+            setState(() {
+              _isLoading = true;
+            });
+          },
+          onPageFinished: (String url) {
             setState(() {
               _isLoading = false;
             });
+          },
+          onWebResourceError: (WebResourceError error) {
+            debugPrint('Webview Error: ${error.description}');
           },
         ),
       )
@@ -62,9 +58,26 @@ class _LbAiMainScreenState extends State<LbAiMainScreen> {
           children: [
             WebViewWidget(controller: _controller),
             if (_isLoading)
-              const Center(
-                child: CircularProgressIndicator(
-                  color: Color(0xFF00E5FF),
+              Container(
+                color: const Color(0xFF04060C),
+                child: const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF00E5FF)),
+                      ),
+                      SizedBox(height: 20),
+                      Text(
+                        'LB AI Super-Engine Loading...',
+                        style: TextStyle(
+                          color: Color(0xFF00E5FF),
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
           ],

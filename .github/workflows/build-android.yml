@@ -1,4 +1,4 @@
-name: Build LB AI Android App
+ name: Build LB AI Android App
 
 on:
   push:
@@ -24,9 +24,11 @@ jobs:
         with:
           channel: 'stable'
 
-      - name: Initialize Android Platform Structure
+      - name: Initialize Android & Enable Internet
         run: |
           flutter create --platforms=android --org=com.lbai.app .
+          # Add Internet permission to AndroidManifest.xml
+          sed -i 's/<manifest xmlns:android="http:\/\/schemas.android.com\/apk\/res\/android">/<manifest xmlns:android="http:\/\/schemas.android.com\/apk\/res\/android">\n    <uses-permission android:name="android.permission.INTERNET"\/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"\/>/' android/app/src/main/AndroidManifest.xml
           flutter pub get
 
       - name: Build Android APK

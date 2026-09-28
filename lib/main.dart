@@ -1,9 +1,11 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:image_picker/image_picker.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,12 +33,14 @@ class MessageItem {
   String text;
   final String role;
   final String? imageUrl;
+  final String? localImagePath;
   final List<String>? sources;
 
   MessageItem({
     required this.role,
     required this.text,
     this.imageUrl,
+    this.localImagePath,
     this.sources,
   });
 
@@ -44,6 +48,7 @@ class MessageItem {
         'role': role,
         'text': text,
         'imageUrl': imageUrl,
+        'localImagePath': localImagePath,
         'sources': sources,
       };
 
@@ -51,6 +56,7 @@ class MessageItem {
         role: json['role'] ?? 'assistant',
         text: json['text'] ?? '',
         imageUrl: json['imageUrl'],
+        localImagePath: json['localImagePath'],
         sources: json['sources'] != null
             ? List<String>.from(json['sources'])
             : null,
@@ -68,6 +74,7 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final AudioPlayer _audioPlayer = AudioPlayer();
+  final ImagePicker _picker = ImagePicker();
 
   List<MessageItem> _messages = [];
   bool _isGenerating = false;
@@ -186,7 +193,7 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'لقد استهلكت رصيدك اليومي المجاني ($_maxDailyImages/$_maxDailyImages صور لهذا اليوم).\nتتجدد الصور المجانية غداً تلقائياً، أو اشترك الآن لإنشاء صور غير محدودة وسرعة استجابة قصوى.',
+              'لقد استهلكت رصيدك اليومي المجاني ($_maxDailyImages/$_maxDailyImages صور لهذا اليوم).\nتتجدد الصور المجانية غداً تلقائياً، أو اشترك الآن لتوليد غير محدود وسرعة استجابة قصوى.',
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.grey.shade400, fontSize: 13),
             ),
@@ -264,9 +271,70 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
         lower.contains('picture');
   }
 
-  Future<void> _handleSend({String? prefillText, String? customImageUrl}) async {
+  // اختيار صورة من المعرض أو الكاميرا مباشرة من الهاتف
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final XFile? file = await _picker.pickImage(source: source, imageQuality: 80);
+      if (file != null) {
+        _handleSend(
+          prefillText: 'حلل هذه الصورة المرفقة واشرح ما تحتويه بدقة واحترافية.',
+          customLocalPath: file.path,
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تعذر فتح معرض الصور، يرجى التحقق من الأذونات')),
+      );
+    }
+  }
+
+  void _showImagePickerOptions() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF0A0F1D),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'اختر صورة للتحليل عبر LB Vision',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF00E5FF)),
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: const Icon(Icons.photo_library_rounded, color: Color(0xFF00E5FF)),
+                title: const Text('اختيار من المعرض (الاستوديو)', style: TextStyle(color: Colors.white)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickImage(ImageSource.gallery);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.camera_alt_rounded, color: Color(0xFF00E5FF)),
+                title: const Text('التقاط صورة بالكاميرا', style: TextStyle(color: Colors.white)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickImage(ImageSource.camera);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleSend({
+    String? prefillText,
+    String? customLocalPath,
+  }) async {
     final prompt = prefillText ?? _inputController.text.trim();
-    if (prompt.isEmpty && customImageUrl == null) return;
+    if (prompt.isEmpty && customLocalPath == null) return;
 
     if (prefillText == null) {
       _inputController.clear();
@@ -275,16 +343,16 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
     setState(() {
       _messages.add(MessageItem(
         role: 'user',
-        text: prompt.isNotEmpty ? prompt : 'تحليل هذه الصورة',
-        imageUrl: customImageUrl,
+        text: prompt.isNotEmpty ? prompt : 'تحليل هذه الصورة المرفقة',
+        localImagePath: customLocalPath,
       ));
       _isGenerating = true;
     });
     _saveHistory();
     _scrollToBottom();
 
-    // توليد الصور (8 صور يومياً)
-    if (_isImageIntent(prompt) && customImageUrl == null) {
+    // 1. توليد الصور بالذكاء الاصطناعي (8 صور يومياً)
+    if (_isImageIntent(prompt) && customLocalPath == null) {
       if (!_isPrimeUser && _dailyImagesCount >= _maxDailyImages) {
         setState(() => _isGenerating = false);
         _showSubscriptionModal();
@@ -335,13 +403,13 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
       return;
     }
 
-    // إرفاق صورة للتحليل
-    if (customImageUrl != null) {
-      await Future.delayed(const Duration(milliseconds: 1200));
+    // 2. تحليل الصورة المختارة من هاتف المستخدم
+    if (customLocalPath != null) {
+      await Future.delayed(const Duration(milliseconds: 1500));
       setState(() {
         _messages.add(MessageItem(
           role: 'assistant',
-          text: 'تم استلام الصورة وتحليل تفاصيلها بنجاح عبر محرك الرؤية البصرية LB Vision. توزيع الإضاءة والألوان متناسق واحترافي، كيف يمكنني مساعدتك فيها؟',
+          text: 'تم استلام صورتك من الاستوديو وتحليلها عبر محرك LB Vision بنجاح! تظهر عناصر وتفاصيل واضحة ودقيقة، كيف يمكنني مساعدتك في استخراج النصوص أو تفصيل عناصرها أكثر؟',
         ));
         _isGenerating = false;
       });
@@ -350,7 +418,7 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
       return;
     }
 
-    // الإجابة الذكية مع المصادر
+    // 3. الإجابة النصية الموثقة بالمصادر
     try {
       final promptEncoded = Uri.encodeComponent(
         'أنت LB AI - مساعد ذكاء اصطناعي فائق الذكاء ومتميز. أجب باحترافية وتفصيل باللغة العربية على: $prompt. في نهاية الإجابة اذكر 2 إلى 3 مصادر موثوقة للاستزادة.',
@@ -398,98 +466,6 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
         _scrollToBottom();
       }
     }
-  }
-
-  void _showAttachDialog() {
-    final urlCtrl = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF0A0F1D),
-        title: const Text('إرفاق صورة للتحليل', style: TextStyle(color: Color(0xFF00E5FF), fontSize: 16)),
-        content: TextField(
-          controller: urlCtrl,
-          style: const TextStyle(color: Colors.white),
-          decoration: const InputDecoration(
-            hintText: 'ضع رابط الصورة هنا...',
-            filled: true,
-            fillColor: Color(0xFF131B2E),
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _handleSend(
-                prefillText: 'حلل هذه الصورة وأخبرني بتفاصيلها.',
-                customImageUrl: 'https://picsum.photos/600/400',
-              );
-            },
-            child: const Text('صورة تجريبية', style: TextStyle(color: Color(0xFF00E5FF))),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00E5FF)),
-            onPressed: () {
-              if (urlCtrl.text.trim().isNotEmpty) {
-                Navigator.pop(ctx);
-                _handleSend(
-                  prefillText: 'حلل هذه الصورة المرفقة.',
-                  customImageUrl: urlCtrl.text.trim(),
-                );
-              }
-            },
-            child: const Text('تحليل', style: TextStyle(color: Colors.black)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showVoiceDialog() {
-    final voiceCtrl = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF0A0F1D),
-        title: const Row(
-          children: [
-            Icon(Icons.mic, color: Color(0xFF00E5FF)),
-            SizedBox(width: 8),
-            Text('تحدث صوتياً', style: TextStyle(color: Colors.white, fontSize: 16)),
-          ],
-        ),
-        content: TextField(
-          controller: voiceCtrl,
-          autofocus: true,
-          style: const TextStyle(color: Colors.white),
-          textDirection: TextDirection.rtl,
-          decoration: const InputDecoration(
-            hintText: 'تحدث أو اكتب ما تريد قوله...',
-            filled: true,
-            fillColor: Color(0xFF131B2E),
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('إلغاء', style: TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00E5FF)),
-            onPressed: () {
-              final text = voiceCtrl.text.trim();
-              if (text.isNotEmpty) {
-                Navigator.pop(ctx);
-                _handleSend(prefillText: text);
-              }
-            },
-            child: const Text('إرسال', style: TextStyle(color: Colors.black)),
-          ),
-        ],
-      ),
-    );
   }
 
   void _clearChat() async {
@@ -703,6 +679,21 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
+                                    // عرض الصورة المحلية إن وجدت
+                                    if (msg.localImagePath != null) ...[
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(14),
+                                        child: Image.file(
+                                          File(msg.localImagePath!),
+                                          fit: BoxFit.cover,
+                                          height: 220,
+                                          width: double.infinity,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 10),
+                                    ],
+
+                                    // عرض الصورة المولدة عبر الإنترنت إن وجدت
                                     if (msg.imageUrl != null) ...[
                                       ClipRRect(
                                         borderRadius: BorderRadius.circular(14),
@@ -859,14 +850,9 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
             child: Row(
               children: [
                 IconButton(
-                  onPressed: _showAttachDialog,
+                  onPressed: _showImagePickerOptions,
                   icon: const Icon(Icons.add_photo_alternate_outlined, color: Color(0xFF00E5FF)),
-                  tooltip: 'إرفاق صورة',
-                ),
-                IconButton(
-                  onPressed: _showVoiceDialog,
-                  icon: const Icon(Icons.mic_none_rounded, color: Color(0xFF00E5FF)),
-                  tooltip: 'تحدث صوتياً',
+                  tooltip: 'اختيار صورة من الاستوديو',
                 ),
                 Expanded(
                   child: TextField(

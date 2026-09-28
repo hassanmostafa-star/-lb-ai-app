@@ -19,8 +19,8 @@ class ChatGptStyleApp extends StatelessWidget {
       title: 'LB AI',
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF212121), // لون خلفية ChatGPT الرسمي
-        primaryColor: const Color(0xFF10A37F), // أخضر ChatGPT
+        scaffoldBackgroundColor: const Color(0xFF212121),
+        primaryColor: const Color(0xFF10A37F),
       ),
       home: const ChatGptScreen(),
     );
@@ -29,7 +29,7 @@ class ChatGptStyleApp extends StatelessWidget {
 
 class MessageItem {
   String text;
-  final String role; // 'user' or 'assistant'
+  final String role;
   final String? imageUrl;
   final List<String>? sources;
 
@@ -73,7 +73,6 @@ class _ChatGptScreenState extends State<ChatGptScreen> {
   bool _isGenerating = false;
   bool _isAudioPlaying = false;
 
-  // 8 صور مجانية يومياً تتجدد كل 24 ساعة
   int _dailyImagesCount = 0;
   final int _maxDailyImages = 8;
   bool _isPrimeUser = false;
@@ -97,7 +96,7 @@ class _ChatGptScreenState extends State<ChatGptScreen> {
         _messages = [
           MessageItem(
             role: 'assistant',
-            text: 'مرحباً! كيف يمكنني مساعدتك اليوم؟\n\n• إجابات فورية وتحليل ذكي موثق بالمصادر.\n• توليد وتصميم حتى 8 صور مجانية يومياً.\n• دعم التفاعل الصوتي وقراءة النصوص.',
+            text: 'مرحباً بك في LB AI! كيف يمكنني مساعدتك اليوم؟\n\n• إجابات فورية وتحليل ذكي موثق بالمصادر.\n• توليد وتصميم حتى 8 صور مجانية يومياً.\n• دعم التفاعل الصوتي وقراءة النصوص.',
           ),
         ];
       });
@@ -306,7 +305,6 @@ class _ChatGptScreenState extends State<ChatGptScreen> {
         final query = cleanPrompt.isNotEmpty ? cleanPrompt : 'creative masterpiece';
         final encoded = Uri.encodeComponent(query);
 
-        // رابط توليد مباشر عالي الدقة يظهر فوراً داخل الشات
         final generatedUrl =
             'https://image.pollinations.ai/prompt/$encoded?width=800&height=800&nologo=true&seed=${DateTime.now().millisecondsSinceEpoch}';
 
@@ -356,11 +354,11 @@ class _ChatGptScreenState extends State<ChatGptScreen> {
     // 3. الإجابة الذكية مع المصادر الموثقة
     try {
       final promptEncoded = Uri.encodeComponent(
-        'أنت مساعد ذكاء اصطناعي فائق الذكاء ومطابق لـ ChatGPT. أجب باحترافية وتفصيل باللغة العربية على: $prompt. في نهاية الإجابة اذكر 2 إلى 3 مصادر موثوقة للاستزادة.',
+        'أنت LB AI - مساعد ذكاء اصطناعي فائق الذكاء ومتميز. أجب باحترافية وتفصيل باللغة العربية على: $prompt. في نهاية الإجابة اذكر 2 إلى 3 مصادر موثوقة للاستزادة.',
       );
 
       final url = Uri.parse(
-        'https://text.pollinations.ai/$promptEncoded?model=openai&system=أنت%20ChatGPT',
+        'https://text.pollinations.ai/$promptEncoded?model=openai&system=أنت%20LB%20AI',
       );
 
       final response = await http.get(url).timeout(const Duration(seconds: 25));
@@ -369,7 +367,7 @@ class _ChatGptScreenState extends State<ChatGptScreen> {
         final reply = utf8.decode(response.bodyBytes);
         final sources = [
           'الموسوعة العلمية والمراجع المعتمدة 2026',
-          'قاعدة بيانات ChatGPT المعرفية الموثقة',
+          'قاعدة بيانات LB AI المعرفية الموثقة',
         ];
 
         setState(() {
@@ -503,7 +501,7 @@ class _ChatGptScreenState extends State<ChatGptScreen> {
       _messages.add(
         MessageItem(
           role: 'assistant',
-          text: 'تم بدء محادثة جديدة. كيف يمكنني مساعدتك؟',
+          text: 'تم بدء محادثة جديدة مع LB AI. كيف يمكنني مساعدتك؟',
         ),
       );
     });
@@ -512,7 +510,7 @@ class _ChatGptScreenState extends State<ChatGptScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF212121), // ستايل ChatGPT الداكن
+      backgroundColor: const Color(0xFF212121),
       appBar: AppBar(
         backgroundColor: const Color(0xFF212121),
         elevation: 0,
@@ -531,10 +529,11 @@ class _ChatGptScreenState extends State<ChatGptScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'ChatGPT (LB AI)',
+                  'LB AI',
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: 17,
                     fontWeight: FontWeight.bold,
+                    letterSpacing: 1.1,
                     color: Colors.white,
                   ),
                 ),
@@ -579,7 +578,6 @@ class _ChatGptScreenState extends State<ChatGptScreen> {
                     mainAxisAlignment:
                         isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
                     children: [
-                      // أفاتار الرد مثل شات جي بي تي
                       if (!isUser) ...[
                         Container(
                           margin: const EdgeInsets.only(top: 4, right: 10),
@@ -599,14 +597,13 @@ class _ChatGptScreenState extends State<ChatGptScreen> {
                               horizontal: 16, vertical: 12),
                           decoration: BoxDecoration(
                             color: isUser
-                                ? const Color(0xFF2F2F2F) // فقاعة المستخدم
-                                : Colors.transparent, // فقاعة ChatGPT
+                                ? const Color(0xFF2F2F2F)
+                                : Colors.transparent,
                             borderRadius: BorderRadius.circular(18),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // عرض الصورة إن وُجدت
                               if (msg.imageUrl != null) ...[
                                 ClipRRect(
                                   borderRadius: BorderRadius.circular(14),
@@ -643,7 +640,6 @@ class _ChatGptScreenState extends State<ChatGptScreen> {
                                 const SizedBox(height: 10),
                               ],
 
-                              // نص الرسالة
                               Text(
                                 msg.text,
                                 textDirection: TextDirection.rtl,
@@ -654,7 +650,6 @@ class _ChatGptScreenState extends State<ChatGptScreen> {
                                 ),
                               ),
 
-                              // أزرار التحكم أسفل كل رد مثل ChatGPT (استماع + نسخ)
                               const SizedBox(height: 10),
                               Row(
                                 mainAxisSize: MainAxisSize.min,
@@ -704,7 +699,6 @@ class _ChatGptScreenState extends State<ChatGptScreen> {
                                 ],
                               ),
 
-                              // المصادر والمراجع
                               if (msg.sources != null &&
                                   msg.sources!.isNotEmpty) ...[
                                 const SizedBox(height: 10),
@@ -745,7 +739,6 @@ class _ChatGptScreenState extends State<ChatGptScreen> {
             ),
           ),
 
-          // مؤشر الكتابة التفاعلي
           if (_isGenerating)
             Padding(
               padding: const EdgeInsets.only(bottom: 12, left: 24, right: 24),
@@ -762,14 +755,13 @@ class _ChatGptScreenState extends State<ChatGptScreen> {
                   ),
                   const SizedBox(width: 10),
                   Text(
-                    'ChatGPT يفكّر ويكتب لك...',
+                    'LB AI يفكّر ويكتب لك...',
                     style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
                   ),
                 ],
               ),
             ),
 
-          // شريط إدخال الرسائل بتصميم ChatGPT الحديث والمستدير
           Container(
             padding: const EdgeInsets.all(12),
             decoration: const BoxDecoration(

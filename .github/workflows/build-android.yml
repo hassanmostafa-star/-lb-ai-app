@@ -23,9 +23,9 @@ jobs:
 
     - run: flutter pub get
 
-    - run: flutter build appbundle --release
+    - run: flutter build apk --release
 
     - uses: actions/upload-artifact@v4
       with:
-        name: LB-AI-GooglePlay-AAB
-        path: build/app/outputs/bundle/release/app-release.aab
+        name: LB-AI-App-APK
+        path: build/app/outputs/flutter-apk/app-release.apk

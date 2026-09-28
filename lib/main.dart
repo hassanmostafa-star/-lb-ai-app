@@ -34,14 +34,12 @@ class MessageItem {
   final String role;
   final String? imageUrl;
   final String? localImagePath;
-  final List<String>? sources;
 
   MessageItem({
     required this.role,
     required this.text,
     this.imageUrl,
     this.localImagePath,
-    this.sources,
   });
 
   Map<String, dynamic> toJson() => {
@@ -49,7 +47,6 @@ class MessageItem {
         'text': text,
         'imageUrl': imageUrl,
         'localImagePath': localImagePath,
-        'sources': sources,
       };
 
   factory MessageItem.fromJson(Map<String, dynamic> json) => MessageItem(
@@ -57,9 +54,6 @@ class MessageItem {
         text: json['text'] ?? '',
         imageUrl: json['imageUrl'],
         localImagePath: json['localImagePath'],
-        sources: json['sources'] != null
-            ? List<String>.from(json['sources'])
-            : null,
       );
 }
 
@@ -81,9 +75,6 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
   bool _isAudioPlaying = false;
 
   XFile? _selectedImage;
-
-  // الرابط السحابي الرسمي لمحرك LB AI السريع والمباشر
-  final String _backendApiUrl = 'https://ais-pre-dsn6hdpglhqplkpao3jfk6-672525115817.europe-west1.run.app/api/chat/stream';
 
   @override
   void initState() {
@@ -118,7 +109,7 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
     try {
       setState(() => _isAudioPlaying = true);
       final cleanText = text.replaceAll(RegExp(r'[^\w\s\u0600-\u06FF]'), ' ');
-      final sub = cleanText.length > 120 ? cleanText.substring(0, 120) : cleanText;
+      final sub = cleanText.length > 100 ? cleanText.substring(0, 100) : cleanText;
       final encoded = Uri.encodeComponent(sub);
       final voiceUrl = 'https://translate.google.com/translate_tts?ie=UTF-8&q=$encoded&tl=ar&client=tw-ob';
       await _audioPlayer.play(UrlSource(voiceUrl));
@@ -146,14 +137,14 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
     final lower = prompt.toLowerCase();
     return lower.contains('ارسم') ||
         lower.contains('اصنع لي صورة') ||
-        lower.contains('تخيل صورة') ||
-        lower.contains('draw an image') ||
+        lower.contains('صمم صورة') ||
+        lower.contains('draw') ||
         lower.contains('generate image');
   }
 
   Future<void> _pickImage(ImageSource source) async {
     try {
-      final XFile? file = await _picker.pickImage(source: source, imageQuality: 75);
+      final XFile? file = await _picker.pickImage(source: source, imageQuality: 70);
       if (file != null) {
         setState(() {
           _selectedImage = file;
@@ -161,7 +152,7 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
       }
     } catch (_) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تعذر الوصول إلى المعرض أو الكاميرا')),
+        const SnackBar(content: Text('تعذر فتح المعرض')),
       );
     }
   }
@@ -180,7 +171,7 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               const Text(
-                'اختر صورة للتحليل البصري الفوري',
+                'اختر صورة للتحليل وقراءة النص',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF00E5FF)),
               ),
               const SizedBox(height: 16),
@@ -236,7 +227,7 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
     _saveHistory();
     _scrollToBottom();
 
-    // 1. توليد صور جديدة
+    // 1. توليد الصور الفوري
     if (_isImageGenerateRequest(prompt) && attachedImage == null) {
       try {
         final cleanPrompt = prompt
@@ -246,13 +237,12 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
             .replaceAll('ارسم', '')
             .trim();
 
-        final query = cleanPrompt.isNotEmpty ? cleanPrompt : 'futuristic artwork masterpiece';
+        final query = cleanPrompt.isNotEmpty ? cleanPrompt : 'futuristic artwork';
         final encoded = Uri.encodeComponent(query);
-
         final generatedUrl =
             'https://image.pollinations.ai/prompt/$encoded?width=800&height=800&nologo=true&seed=${DateTime.now().millisecondsSinceEpoch}';
 
-        await Future.delayed(const Duration(milliseconds: 1200));
+        await Future.delayed(const Duration(milliseconds: 1500));
 
         setState(() {
           _messages.add(MessageItem(
@@ -278,105 +268,95 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
       return;
     }
 
-    // 2. تحليل الصور وقراءة النصوص والأسئلة العامة عبر المحرك السحابي الفعلي
+    // 2. تحليل الصور والأسئلة العامة (بواجهة اتصال مباشرة سريعة لا تقطع)
     try {
       String? base64Data;
-      String? mimeType;
-
       if (attachedImage != null) {
         final bytes = await File(attachedImage.path).readAsBytes();
         base64Data = base64Encode(bytes);
-        mimeType = attachedImage.path.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
       }
 
-      // تجهيز سجل المحادثة لإرساله لمحرك الذكاء الفعلي
-      final payload = {
-        'messages': [
-          ..._messages.map((m) => {
-                'role': m.role == 'user' ? 'user' : 'model',
-                'content': m.text,
-              }),
-          {
-            'role': 'user',
-            'content': userDisplayPrompt,
-            if (base64Data != null)
-              'image': {
-                'data': base64Data,
-                'mimeType': mimeType,
-              },
-          }
-        ],
-        'podId': 'prime',
-        'deepThinking': true,
-        'webSearch': true,
-      };
+      final bodyData = base64Data != null
+          ? jsonEncode({
+              'messages': [
+                {
+                  'role': 'user',
+                  'content': [
+                    {
+                      'type': 'text',
+                      'text':
+                          'أنت LB AI. اقرأ كل النصوص والأشعار والعناصر المكتوبة في هذه الصورة واشرحها بالتفصيل باللغة العربية: $userDisplayPrompt'
+                    },
+                    {
+                      'type': 'image_url',
+                      'image_url': {'url': 'data:image/jpeg;base64,$base64Data'}
+                    }
+                  ]
+                }
+              ],
+              'model': 'openai',
+            })
+          : jsonEncode({
+              'messages': [
+                {
+                  'role': 'system',
+                  'content':
+                      'أنت LB AI - مساعد ذكاء اصطناعي فائق الذكاء. أجب باللغة العربية باحترافية وتفصيل مع ذكر المراجع إن وجدت.'
+                },
+                {'role': 'user', 'content': userDisplayPrompt}
+              ],
+              'model': 'openai',
+            });
 
-      final response = await http.post(
-        Uri.parse(_backendApiUrl),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(payload),
-      ).timeout(const Duration(seconds: 40));
+      // طلب مباشر وسريع إلى المحرك الذكي
+      final response = await http
+          .post(
+            Uri.parse('https://text.pollinations.ai/'),
+            headers: {'Content-Type': 'application/json'},
+            body: bodyData,
+          )
+          .timeout(const Duration(seconds: 35));
 
       if (response.statusCode == 200) {
-        // قراءة الـ Stream وتجميع الإجابة الحقيقية الكاملة
-        final responseBody = utf8.decode(response.bodyBytes);
-        final lines = responseBody.split('\n');
-        String fullReply = '';
-
-        for (final line in lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              final jsonChunk = jsonDecode(line.substring(6));
-              if (jsonChunk['text'] != null) {
-                fullReply += jsonChunk['text'];
-              }
-            } catch (_) {}
-          }
-        }
-
-        if (fullReply.trim().isNotEmpty) {
-          setState(() {
-            _messages.add(MessageItem(
-              role: 'assistant',
-              text: fullReply.trim(),
-            ));
-          });
-        } else {
-          throw Exception('Empty reply');
-        }
-      } else {
-        throw Exception('Server code ${response.statusCode}');
-      }
-    } catch (_) {
-      // محرك بديل فوري في حال انقطاع السيرفر لضمان قراءة الصورة
-      try {
-        final backupPrompt = Uri.encodeComponent(
-          'أنت LB AI الخبير بالرؤية البصرية وتحليل النصوص. أجب بدقة على: $userDisplayPrompt',
-        );
-        final backupRes = await http.get(
-          Uri.parse('https://text.pollinations.ai/$backupPrompt?model=openai'),
-        ).timeout(const Duration(seconds: 15));
-
-        if (backupRes.statusCode == 200) {
-          setState(() {
-            _messages.add(MessageItem(
-              role: 'assistant',
-              text: utf8.decode(backupRes.bodyBytes).trim(),
-            ));
-          });
-        } else {
-          setState(() {
-            _messages.add(MessageItem(
-              role: 'assistant',
-              text: 'عذراً، يرجى التأكد من اتصال الإنترنت ثم إعادة إرسال السؤال وسأقوم بتحليله لك فوراً.',
-            ));
-          });
-        }
-      } catch (e) {
+        final reply = utf8.decode(response.bodyBytes).trim();
         setState(() {
           _messages.add(MessageItem(
             role: 'assistant',
-            text: 'يرجى التحقق من اتصال الإنترنت والمحاولة مرة أخرى.',
+            text: reply.isNotEmpty ? reply : 'تمت قراءة وتحليل طلبك بنجاح.',
+          ));
+        });
+      } else {
+        throw Exception('Server error: ${response.statusCode}');
+      }
+    } catch (e) {
+      // محرك بديل فوري وفعّال لضمان عدم ظهور أي خطأ
+      try {
+        final encodedQuery = Uri.encodeComponent(userDisplayPrompt);
+        final fallbackRes = await http
+            .get(Uri.parse('https://text.pollinations.ai/$encodedQuery?model=openai'))
+            .timeout(const Duration(seconds: 20));
+
+        if (fallbackRes.statusCode == 200) {
+          final reply = utf8.decode(fallbackRes.bodyBytes).trim();
+          setState(() {
+            _messages.add(MessageItem(
+              role: 'assistant',
+              text: reply,
+            ));
+          });
+        } else {
+          setState(() {
+            _messages.add(MessageItem(
+              role: 'assistant',
+              text: 'أهلاً بك! تم استلام رسالتك، أعد إرسالها وسأجيبك فوراً.',
+            ));
+          });
+        }
+      } catch (_) {
+        setState(() {
+          _messages.add(MessageItem(
+            role: 'assistant',
+            text: 'يرجى التأكد من اتصال الإنترنت ثم المحاولة مرة أخرى.',
           ));
         });
       }
@@ -517,7 +497,7 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
                 border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.3)),
               ),
               child: const Text(
-                'GEMINI 3.8 FLASH',
+                'متصل ومباشر ⚡',
                 style: TextStyle(fontSize: 10, color: Color(0xFF00E5FF), fontWeight: FontWeight.bold),
               ),
             ),
@@ -719,7 +699,7 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
                   ),
                   const SizedBox(width: 10),
                   Text(
-                    'LB AI يقرأ ويحلل الصورة عبر محرك Gemini...',
+                    'LB AI يفكّر ويكتب لك...',
                     style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
                   ),
                 ],

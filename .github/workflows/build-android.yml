@@ -10,38 +10,22 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
+    - uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: 'stable'
-          cache: true
+    - uses: subosito/flutter-action@v2
+      with:
+        channel: 'stable'
 
-      - name: Install Dependencies
-        run: flutter pub get
+    - run: flutter pub get
 
-      - name: Build Android App Bundle
-        run: flutter build appbundle --release
+    - run: flutter build appbundle --release
 
-      - name: Build Android APK
-        run: flutter build apk --release
-
-      - name: Upload Google Play AAB
-        uses: actions/upload-artifact@v4
-        with:
-          name: LB-AI-GooglePlay-AAB
-          path: build/app/outputs/bundle/release/app-release.aab
-
-      - name: Upload Release APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: LB-AI-App-APK
-          path: build/app/outputs/flutter-apk/app-release.apk
+    - uses: actions/upload-artifact@v4
+      with:
+        name: LB-AI-GooglePlay-AAB
+        path: build/app/outputs/bundle/release/app-release.aab

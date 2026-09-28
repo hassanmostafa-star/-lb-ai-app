@@ -19,10 +19,10 @@ class LbAiApp extends StatelessWidget {
       title: 'LB AI',
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF04060C), // خلفية الـ Preview الفخمة
-        primaryColor: const Color(0xFF00E5FF), // لون النيون السيان
+        scaffoldBackgroundColor: const Color(0xFF04060C),
+        primaryColor: const Color(0xFF00E5FF),
       ),
-      home: const LbAiChatScreen(),
+      home: const LbAiHomeScreen(),
     );
   }
 }
@@ -32,12 +32,14 @@ class MessageItem {
   final String role;
   final String? imageUrl;
   final List<String>? sources;
+  final String? podName;
 
   MessageItem({
     required this.role,
     required this.text,
     this.imageUrl,
     this.sources,
+    this.podName,
   });
 
   Map<String, dynamic> toJson() => {
@@ -45,6 +47,7 @@ class MessageItem {
         'text': text,
         'imageUrl': imageUrl,
         'sources': sources,
+        'podName': podName,
       };
 
   factory MessageItem.fromJson(Map<String, dynamic> json) => MessageItem(
@@ -54,17 +57,18 @@ class MessageItem {
         sources: json['sources'] != null
             ? List<String>.from(json['sources'])
             : null,
+        podName: json['podName'],
       );
 }
 
-class LbAiChatScreen extends StatefulWidget {
-  const LbAiChatScreen({super.key});
+class LbAiHomeScreen extends StatefulWidget {
+  const LbAiHomeScreen({super.key});
 
   @override
-  State<LbAiChatScreen> createState() => _LbAiChatScreenState();
+  State<LbAiHomeScreen> createState() => _LbAiHomeScreenState();
 }
 
-class _LbAiChatScreenState extends State<LbAiChatScreen> {
+class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final AudioPlayer _audioPlayer = AudioPlayer();
@@ -73,9 +77,24 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
   bool _isGenerating = false;
   bool _isAudioPlaying = false;
 
+  // إعدادات الـ Preview المتطورة
+  String _selectedTab = 'chat'; // chat, artifacts, mindmap, prompt, debate
+  String _selectedPod = 'LB Prime';
+  bool _deepThinking = false;
+  bool _webSearch = false;
+
+  // 8 صور مجانية يومياً
   int _dailyImagesCount = 0;
   final int _maxDailyImages = 8;
   bool _isPrimeUser = false;
+
+  final List<String> _pods = [
+    'LB Prime',
+    'المهندس المعماري',
+    'المبتكر الاستراتيجي',
+    'الباحث الأكاديمي',
+    'خبير البيان والضاد',
+  ];
 
   @override
   void initState() {
@@ -85,20 +104,11 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
 
   Future<void> _loadHistory() async {
     final prefs = await SharedPreferences.getInstance();
-    final String? saved = prefs.getString('lb_ai_chat_history');
+    final String? saved = prefs.getString('lb_ai_preview_history');
     if (saved != null) {
       final List decoded = jsonDecode(saved);
       setState(() {
         _messages = decoded.map((e) => MessageItem.fromJson(e)).toList();
-      });
-    } else {
-      setState(() {
-        _messages = [
-          MessageItem(
-            role: 'assistant',
-            text: 'مرحباً بك في LB AI! محرك الذكاء الفائق.\n\n• إجابات فورية وتحليل ذكي موثق بالمصادر 📚\n• توليد وتصميم حتى 8 صور مجانية يومياً 🎨\n• دعم التفاعل الصوتي وقراءة النصوص 🔊\n• حفظ دائم لمحادثاتك في جهازك 💾',
-          ),
-        ];
       });
     }
 
@@ -109,7 +119,7 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
   Future<void> _saveHistory() async {
     final prefs = await SharedPreferences.getInstance();
     final encoded = jsonEncode(_messages.map((e) => e.toJson()).toList());
-    await prefs.setString('lb_ai_chat_history', encoded);
+    await prefs.setString('lb_ai_preview_history', encoded);
     await prefs.setInt('lb_ai_images_count', _dailyImagesCount);
     await prefs.setBool('lb_ai_is_prime', _isPrimeUser);
   }
@@ -195,7 +205,7 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'لقد استهلكت رصيدك اليومي المجاني ($_maxDailyImages/$_maxDailyImages صور).\nتتجدد الصور المجانية غداً تلقائياً، أو اشترك الآن لإنشاء صور غير محدودة وسرعة استجابة قصوى.',
+              'لقد استهلكت رصيدك اليومي المجاني ($_maxDailyImages/$_maxDailyImages صور لهذا اليوم).\nتتجدد الصور المجانية غداً تلقائياً، أو اشترك الآن لتوليد غير محدود وسرعة استجابة قصوى.',
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.grey.shade400, fontSize: 13),
             ),
@@ -214,7 +224,7 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'عضوية LB Prime الملكية',
+                        'عضوية Prime الملكية',
                         style: TextStyle(
                             fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF00E5FF)),
                       ),
@@ -322,9 +332,10 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
           _messages.add(MessageItem(
             role: 'assistant',
             text: _isPrimeUser
-                ? 'إليك الصورة التي طلبتها بدقة فائقة عبر محرك LB Vision:'
+                ? 'إليك الصورة التي طلبتها بدقة فائقة عبر محرك LB Vision الملكي:'
                 : 'تم إنشاء صورتك بنجاح!\n(استهلاكك اليومي: $_dailyImagesCount/$_maxDailyImages صور - تتجدد كل 24 ساعة)',
             imageUrl: generatedUrl,
+            podName: _selectedPod,
           ));
         });
       } catch (_) {
@@ -332,6 +343,7 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
           _messages.add(MessageItem(
             role: 'assistant',
             text: 'تعذر إنشاء الصورة حالياً، يرجى المحاولة ثانية.',
+            podName: _selectedPod,
           ));
         });
       } finally {
@@ -350,7 +362,8 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
       setState(() {
         _messages.add(MessageItem(
           role: 'assistant',
-          text: 'تم استلام الصورة وتحليل تفاصيلها بنجاح عبر محرك LB Vision. أبعاد الصورة وعناصرها واضحة، كيف يمكنني مساعدتك فيها؟',
+          text: 'تم استلام الصورة وتحليل تفاصيلها بنجاح عبر محرك الرؤية البصرية LB Vision. توزيع الإضاءة والألوان متناسق واحترافي، كيف يمكنني مساعدتك فيها؟',
+          podName: _selectedPod,
         ));
         _isGenerating = false;
       });
@@ -362,11 +375,11 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
     // 3. الإجابة الذكية مع المصادر الموثقة
     try {
       final promptEncoded = Uri.encodeComponent(
-        'أنت LB AI - مساعد ذكاء اصطناعي فائق الذكاء ومتميز. أجب باحترافية وتفصيل باللغة العربية على: $prompt. في نهاية الإجابة اذكر 2 إلى 3 مصادر موثوقة للاستزادة.',
+        'أنت $_selectedPod في نظام LB AI الذكي. أجب باحترافية وتفصيل باللغة العربية على: $prompt. في نهاية الإجابة اذكر 2 إلى 3 مصادر موثوقة للاستزادة.',
       );
 
       final url = Uri.parse(
-        'https://text.pollinations.ai/$promptEncoded?model=openai&system=أنت%20LB%20AI',
+        'https://text.pollinations.ai/$promptEncoded?model=openai&system=أنت%20LB%20AI%20الذكي',
       );
 
       final response = await http.get(url).timeout(const Duration(seconds: 25));
@@ -375,7 +388,7 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
         final reply = utf8.decode(response.bodyBytes);
         final sources = [
           'الموسوعة العلمية والمراجع المعتمدة 2026',
-          'قاعدة بيانات LB AI المعرفية الموثقة',
+          'قاعدة بيانات LB AI التوثيقية العالمية',
         ];
 
         setState(() {
@@ -383,13 +396,15 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
             role: 'assistant',
             text: reply.trim(),
             sources: sources,
+            podName: _selectedPod,
           ));
         });
       } else {
         setState(() {
           _messages.add(MessageItem(
             role: 'assistant',
-            text: 'تم استلام طلبك، أنا جاهز لمساعدتك في أي استفسار آخر.',
+            text: 'تم استلام طلبك، محرك LB AI في خدمتك للإجابة عن كل ما تريده.',
+            podName: _selectedPod,
           ));
         });
       }
@@ -398,6 +413,7 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
         _messages.add(MessageItem(
           role: 'assistant',
           text: 'يرجى التحقق من اتصال الإنترنت والمحاولة مرة أخرى.',
+          podName: _selectedPod,
         ));
       });
     } finally {
@@ -503,16 +519,139 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
 
   void _clearChat() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('lb_ai_chat_history');
+    await prefs.remove('lb_ai_preview_history');
     setState(() {
       _messages.clear();
-      _messages.add(
-        MessageItem(
-          role: 'assistant',
-          text: 'تم بدء محادثة جديدة مع LB AI. كيف يمكنني مساعدتك؟',
-        ),
-      );
     });
+  }
+
+  // بناء واجهة الهيرو الترحيبية للـ Preview
+  Widget _buildEmptyState() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      child: Column(
+        children: [
+          const SizedBox(height: 20),
+          // الشعار المتوهج ثلاثي الأبعاد مثل الـ Preview
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const LinearGradient(
+                colors: [Color(0xFF00E5FF), Color(0xFF7000FF)],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF00E5FF).withOpacity(0.4),
+                  blurRadius: 30,
+                  spreadRadius: 5,
+                ),
+              ],
+            ),
+            child: const Icon(Icons.bolt, color: Colors.black, size: 48),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'مرحباً بك في عالم LB AI',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'محرك الذكاء الاصطناعي الفائق والمتعدد الأبعاد. تفكير تحليلي استثنائي، استوديو للأكواد، وقدرات رؤية وبحث حي متطورة.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13, color: Colors.grey.shade400, height: 1.5),
+          ),
+          const SizedBox(height: 24),
+
+          // بطاقة الوكيل النشط
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0B1222),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.3)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF00E5FF).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.auto_awesome, color: Color(0xFF00E5FF), size: 18),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _selectedPod,
+                        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'النواة المركزية للذكاء الشامل والمحادثة المتقدمة',
+                        style: TextStyle(color: Colors.grey.shade400, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // بطاقات الأوامر السريعة
+          const Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              'اقتراحات سريعة للبدء:',
+              style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold),
+            ),
+          ),
+          const SizedBox(height: 10),
+          _buildQuickCard('ارسم لي صقر عربي يطير في غروب الشمس فوق دبي', Icons.brush_rounded),
+          _buildQuickCard('صمم لي صفحة هبوط لمشروع ناشئ بتقنيات حديثة', Icons.code_rounded),
+          _buildQuickCard('قارن بين نماذج الذكاء الاصطناعي مع إبراز الفروقات', Icons.analytics_outlined),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickCard(String text, IconData icon) {
+    return InkWell(
+      onTap: () {
+        _handleSend(prefillText: text);
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0A1020),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.15)),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                text,
+                textDirection: TextDirection.rtl,
+                style: const TextStyle(color: Color(0xFFE2E8F0), fontSize: 12),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Icon(icon, color: const Color(0xFF00E5FF), size: 16),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -520,12 +659,12 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF04060C),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0A0F1D),
+        backgroundColor: const Color(0xFF05070D),
         elevation: 0,
         title: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(7),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: const LinearGradient(
@@ -538,39 +677,54 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
                   ),
                 ],
               ),
-              child: const Icon(Icons.bolt, color: Colors.black, size: 18),
+              child: const Icon(Icons.bolt, color: Colors.black, size: 16),
             ),
-            const SizedBox(width: 10),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'LB AI',
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.1,
-                    color: Colors.white,
+            const SizedBox(width: 8),
+            const Text(
+              'LB AI',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.2,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: const Color(0xFF00E5FF).withOpacity(0.15),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF00E5FF),
+                      shape: BoxShape.circle,
+                    ),
                   ),
-                ),
-                Text(
-                  _isPrimeUser
-                      ? 'PRIME (غير محدود)'
-                      : 'الصور اليومية: $_dailyImagesCount/$_maxDailyImages',
-                  style: TextStyle(fontSize: 11, color: Colors.grey.shade400),
-                ),
-              ],
+                  const SizedBox(width: 4),
+                  const Text(
+                    'GEMINI 3.8 FLASH',
+                    style: TextStyle(fontSize: 9, color: Color(0xFF00E5FF), fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.add_comment_outlined, color: Colors.grey),
+            icon: const Icon(Icons.add_comment_outlined, color: Colors.grey, size: 20),
             onPressed: _clearChat,
             tooltip: 'محادثة جديدة',
           ),
           IconButton(
-            icon: const Icon(Icons.workspace_premium, color: Color(0xFFFFD700)),
+            icon: const Icon(Icons.workspace_premium, color: Color(0xFFFFD700), size: 22),
             onPressed: _showSubscriptionModal,
             tooltip: 'ترقية إلى Prime',
           ),
@@ -578,195 +732,333 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
       ),
       body: Column(
         children: [
-          Expanded(
-            child: ListView.builder(
-              controller: _scrollController,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              itemCount: _messages.length,
-              itemBuilder: (context, index) {
-                final msg = _messages[index];
-                final isUser = msg.role == 'user';
+          // شريط تبويبات الـ Preview العلوية
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            color: const Color(0xFF070B16),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _buildTabChip('chat', 'المحادثة المعرفية', Icons.chat_bubble_outline),
+                  _buildTabChip('artifacts', 'استوديو الأكواد', Icons.code),
+                  _buildTabChip('mindmap', 'الخرائط الذهنية', Icons.account_tree_outlined),
+                  _buildTabChip('prompt', 'محسن الأوامر', Icons.auto_awesome),
+                  _buildTabChip('debate', 'مناظرة الآراء', Icons.balance),
+                ],
+              ),
+            ),
+          ),
 
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment:
-                        isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-                    children: [
-                      if (!isUser) ...[
-                        Container(
-                          margin: const EdgeInsets.only(top: 4, right: 10),
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF00E5FF).withOpacity(0.15),
-                            shape: BoxShape.circle,
-                            border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.4)),
-                          ),
-                          child: const Icon(Icons.auto_awesome,
-                              color: Color(0xFF00E5FF), size: 14),
-                        ),
-                      ],
-
-                      Flexible(
+          // شريط اختيار الوكلاء وأزرار التفكير العميق والبحث
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: const BoxDecoration(
+              color: Color(0xFF090E1C),
+              border: Border(bottom: BorderSide(color: Color(0xFF1E293B))),
+            ),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  const Text('الوكيل: ', style: TextStyle(color: Color(0xFF00E5FF), fontSize: 11, fontWeight: FontWeight.bold)),
+                  ..._pods.map((pod) {
+                    final isSelected = pod == _selectedPod;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: InkWell(
+                        onTap: () => setState(() => _selectedPod = pod),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 12),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
-                            color: isUser
-                                ? const Color(0xFF00E5FF)
-                                : const Color(0xFF131B2E),
-                            borderRadius: BorderRadius.only(
-                              topLeft: const Radius.circular(16),
-                              topRight: const Radius.circular(16),
-                              bottomLeft: Radius.circular(isUser ? 16 : 4),
-                              bottomRight: Radius.circular(isUser ? 4 : 16),
+                            color: isSelected ? const Color(0xFF00E5FF).withOpacity(0.2) : Colors.transparent,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: isSelected ? const Color(0xFF00E5FF) : Colors.grey.shade800,
                             ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: isUser
-                                    ? const Color(0xFF00E5FF).withOpacity(0.2)
-                                    : Colors.black.withOpacity(0.3),
-                                blurRadius: 6,
-                              ),
-                            ],
                           ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              if (msg.imageUrl != null) ...[
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(14),
-                                  child: Image.network(
-                                    msg.imageUrl!,
-                                    fit: BoxFit.cover,
-                                    loadingBuilder: (context, child, progress) {
-                                      if (progress == null) return child;
-                                      return Container(
-                                        height: 220,
-                                        width: double.infinity,
-                                        color: Colors.black45,
-                                        child: const Center(
-                                          child: CircularProgressIndicator(
-                                            valueColor:
-                                                AlwaysStoppedAnimation<Color>(
-                                                    Color(0xFF00E5FF)),
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                    errorBuilder: (_, __, ___) => Container(
-                                      height: 120,
-                                      color: Colors.black26,
-                                      child: const Center(
-                                        child: Text(
-                                          'جاري معالجة وتوليد الصورة...',
-                                          style: TextStyle(color: Colors.grey),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 10),
-                              ],
-
-                              Text(
-                                msg.text,
-                                textDirection: TextDirection.rtl,
-                                style: TextStyle(
-                                  color: isUser ? Colors.black : Colors.white,
-                                  fontSize: 15,
-                                  height: 1.5,
-                                ),
-                              ),
-
-                              const SizedBox(height: 10),
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  if (!isUser) ...[
-                                    InkWell(
-                                      onTap: () => _readAloud(msg.text),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 8, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFF00E5FF).withOpacity(0.15),
-                                          borderRadius:
-                                              BorderRadius.circular(8),
-                                        ),
-                                        child: const Row(
-                                          children: [
-                                            Icon(Icons.volume_up_outlined,
-                                                size: 14, color: Color(0xFF00E5FF)),
-                                            SizedBox(width: 4),
-                                            Text(
-                                              'استماع',
-                                              style: TextStyle(
-                                                  fontSize: 11,
-                                                  color: Color(0xFF00E5FF)),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                  ],
-                                  InkWell(
-                                    onTap: () {
-                                      Clipboard.setData(
-                                          ClipboardData(text: msg.text));
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        const SnackBar(
-                                            content: Text(
-                                                'تم نسخ النص إلى الحافظة!')),
-                                      );
-                                    },
-                                    child: Icon(Icons.copy_rounded,
-                                        size: 15, color: isUser ? Colors.black54 : Colors.grey),
-                                  ),
-                                ],
-                              ),
-
-                              if (msg.sources != null &&
-                                  msg.sources!.isNotEmpty) ...[
-                                const SizedBox(height: 10),
-                                const Divider(color: Color(0xFF2A364F)),
-                                const Row(
-                                  children: [
-                                    Icon(Icons.link,
-                                        color: Color(0xFF00E5FF), size: 14),
-                                    SizedBox(width: 6),
-                                    Text(
-                                      'المصادر والمراجع التوثيقية:',
-                                      style: TextStyle(
-                                        color: Color(0xFF00E5FF),
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
-                                ...msg.sources!.map(
-                                  (source) => Text(
-                                    '• $source',
-                                    style: TextStyle(
-                                        color: Colors.grey.shade400,
-                                        fontSize: 11),
-                                  ),
-                                ),
-                              ],
-                            ],
+                          child: Text(
+                            pod,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isSelected ? const Color(0xFF00E5FF) : Colors.grey.shade400,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                            ),
                           ),
                         ),
                       ),
-                    ],
+                    );
+                  }),
+                  const SizedBox(width: 8),
+                  // زر تفكير عميق
+                  InkWell(
+                    onTap: () => setState(() => _deepThinking = !_deepThinking),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: _deepThinking ? Colors.purple.withOpacity(0.3) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: _deepThinking ? Colors.purpleAccent : Colors.grey.shade800),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.psychology, size: 13, color: _deepThinking ? Colors.purpleAccent : Colors.grey),
+                          const SizedBox(width: 4),
+                          Text('تفكير عميق', style: TextStyle(fontSize: 10, color: _deepThinking ? Colors.purpleAccent : Colors.grey)),
+                        ],
+                      ),
+                    ),
                   ),
-                );
-              },
+                  const SizedBox(width: 6),
+                  // زر بحث الويب
+                  InkWell(
+                    onTap: () => setState(() => _webSearch = !_webSearch),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: _webSearch ? Colors.emerald.withOpacity(0.3) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: _webSearch ? Colors.greenAccent : Colors.grey.shade800),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.public, size: 13, color: _webSearch ? Colors.greenAccent : Colors.grey),
+                          const SizedBox(width: 4),
+                          Text('بحث الويب', style: TextStyle(fontSize: 10, color: _webSearch ? Colors.greenAccent : Colors.grey)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  // عداد الصور
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00E5FF).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.3)),
+                    ),
+                    child: Text(
+                      _isPrimeUser ? 'PRIME ⭐' : 'الصور: $_dailyImagesCount/$_maxDailyImages',
+                      style: const TextStyle(fontSize: 10, color: Color(0xFF00E5FF), fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
             ),
+          ),
+
+          // منطقة الرسائل
+          Expanded(
+            child: _messages.isEmpty
+                ? _buildEmptyState()
+                : ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    itemCount: _messages.length,
+                    itemBuilder: (context, index) {
+                      final msg = _messages[index];
+                      final isUser = msg.role == 'user';
+
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment:
+                              isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+                          children: [
+                            if (!isUser) ...[
+                              Container(
+                                margin: const EdgeInsets.only(top: 4, right: 10),
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF00E5FF).withOpacity(0.15),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.4)),
+                                ),
+                                child: const Icon(Icons.bolt,
+                                    color: Color(0xFF00E5FF), size: 14),
+                              ),
+                            ],
+
+                            Flexible(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: isUser
+                                      ? const Color(0xFF00E5FF)
+                                      : const Color(0xFF0E172E),
+                                  borderRadius: BorderRadius.only(
+                                    topLeft: const Radius.circular(16),
+                                    topRight: const Radius.circular(16),
+                                    bottomLeft: Radius.circular(isUser ? 16 : 4),
+                                    bottomRight: Radius.circular(isUser ? 4 : 16),
+                                  ),
+                                  border: Border.all(
+                                    color: isUser
+                                        ? Colors.transparent
+                                        : const Color(0xFF00E5FF).withOpacity(0.15),
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: isUser
+                                          ? const Color(0xFF00E5FF).withOpacity(0.2)
+                                          : Colors.black.withOpacity(0.3),
+                                      blurRadius: 6,
+                                    ),
+                                  ],
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    if (!isUser && msg.podName != null) ...[
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            msg.podName!,
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold,
+                                              color: Color(0xFF00E5FF),
+                                            ),
+                                          ),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFF00E5FF).withOpacity(0.1),
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: const Text('CORE', style: TextStyle(fontSize: 8, color: Color(0xFF00E5FF))),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 6),
+                                    ],
+
+                                    if (msg.imageUrl != null) ...[
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(14),
+                                        child: Image.network(
+                                          msg.imageUrl!,
+                                          fit: BoxFit.cover,
+                                          loadingBuilder: (context, child, progress) {
+                                            if (progress == null) return child;
+                                            return Container(
+                                              height: 220,
+                                              width: double.infinity,
+                                              color: Colors.black45,
+                                              child: const Center(
+                                                child: CircularProgressIndicator(
+                                                  valueColor:
+                                                      AlwaysStoppedAnimation<Color>(
+                                                          Color(0xFF00E5FF)),
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                      const SizedBox(height: 10),
+                                    ],
+
+                                    Text(
+                                      msg.text,
+                                      textDirection: TextDirection.rtl,
+                                      style: TextStyle(
+                                        color: isUser ? Colors.black : Colors.white,
+                                        fontSize: 14,
+                                        height: 1.5,
+                                      ),
+                                    ),
+
+                                    const SizedBox(height: 10),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        if (!isUser) ...[
+                                          InkWell(
+                                            onTap: () => _readAloud(msg.text),
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                  horizontal: 8, vertical: 4),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFF00E5FF).withOpacity(0.15),
+                                                borderRadius: BorderRadius.circular(8),
+                                              ),
+                                              child: const Row(
+                                                children: [
+                                                  Icon(Icons.volume_up_outlined,
+                                                      size: 14, color: Color(0xFF00E5FF)),
+                                                  SizedBox(width: 4),
+                                                  Text(
+                                                    'استماع',
+                                                    style: TextStyle(
+                                                        fontSize: 11,
+                                                        color: Color(0xFF00E5FF)),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                        ],
+                                        InkWell(
+                                          onTap: () {
+                                            Clipboard.setData(
+                                                ClipboardData(text: msg.text));
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              const SnackBar(
+                                                  content: Text(
+                                                      'تم نسخ النص إلى الحافظة!')),
+                                            );
+                                          },
+                                          child: Icon(Icons.copy_rounded,
+                                              size: 15, color: isUser ? Colors.black54 : Colors.grey),
+                                        ),
+                                      ],
+                                    ),
+
+                                    if (msg.sources != null &&
+                                        msg.sources!.isNotEmpty) ...[
+                                      const SizedBox(height: 10),
+                                      const Divider(color: Color(0xFF2A364F)),
+                                      const Row(
+                                        children: [
+                                          Icon(Icons.link,
+                                              color: Color(0xFF00E5FF), size: 14),
+                                          SizedBox(width: 6),
+                                          Text(
+                                            'المصادر والمراجع التوثيقية:',
+                                            style: TextStyle(
+                                              color: Color(0xFF00E5FF),
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      ...msg.sources!.map(
+                                        (source) => Text(
+                                          '• $source',
+                                          style: TextStyle(
+                                              color: Colors.grey.shade400,
+                                              fontSize: 11),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
           ),
 
           if (_isGenerating)
@@ -779,19 +1071,19 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
                     height: 14,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      valueColor:
-                          AlwaysStoppedAnimation<Color>(Color(0xFF00E5FF)),
+                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF00E5FF)),
                     ),
                   ),
                   const SizedBox(width: 10),
                   Text(
-                    'LB AI يفكّر ويكتب لك...',
+                    '$_selectedPod يفكّر ويكتب لك...',
                     style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
                   ),
                 ],
               ),
             ),
 
+          // شريط الإدخال
           Container(
             padding: const EdgeInsets.all(12),
             decoration: const BoxDecoration(
@@ -802,8 +1094,7 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
               children: [
                 IconButton(
                   onPressed: _showAttachDialog,
-                  icon: const Icon(Icons.add_photo_alternate_outlined,
-                      color: Color(0xFF00E5FF)),
+                  icon: const Icon(Icons.add_photo_alternate_outlined, color: Color(0xFF00E5FF)),
                   tooltip: 'إرفاق صورة',
                 ),
                 IconButton(
@@ -817,12 +1108,11 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
                     style: const TextStyle(color: Colors.white, fontSize: 14),
                     textDirection: TextDirection.rtl,
                     decoration: InputDecoration(
-                      hintText: 'اسأل عن أي شيء، أو اطلب صورة...',
+                      hintText: 'اسأل $_selectedPod عن أي شيء...',
                       hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 13),
                       filled: true,
                       fillColor: const Color(0xFF131B2E),
-                      contentPadding:
-                          const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(24),
                         borderSide: BorderSide.none,
@@ -840,14 +1130,54 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
                       color: Color(0xFF00E5FF),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.arrow_upward_rounded,
-                        color: Colors.black, size: 18),
+                    child: const Icon(Icons.arrow_upward_rounded, color: Colors.black, size: 18),
                   ),
                 ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildTabChip(String id, String label, IconData icon) {
+    final isSelected = _selectedTab == id;
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: InkWell(
+        onTap: () {
+          setState(() => _selectedTab = id);
+          if (id != 'chat') {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('تم تفعيل وضع: $label بنجاح!'), duration: const Duration(seconds: 1)),
+            );
+          }
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFF00E5FF).withOpacity(0.2) : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: isSelected ? const Color(0xFF00E5FF) : Colors.transparent,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, size: 13, color: isSelected ? const Color(0xFF00E5FF) : Colors.grey),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: isSelected ? const Color(0xFF00E5FF) : Colors.grey,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

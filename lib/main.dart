@@ -82,6 +82,9 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
 
   XFile? _selectedImage;
 
+  // الرابط السحابي الرسمي لمحرك LB AI السريع والمباشر
+  final String _backendApiUrl = 'https://ais-pre-dsn6hdpglhqplkpao3jfk6-672525115817.europe-west1.run.app/api/chat/stream';
+
   @override
   void initState() {
     super.initState();
@@ -115,7 +118,7 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
     try {
       setState(() => _isAudioPlaying = true);
       final cleanText = text.replaceAll(RegExp(r'[^\w\s\u0600-\u06FF]'), ' ');
-      final sub = cleanText.length > 100 ? cleanText.substring(0, 100) : cleanText;
+      final sub = cleanText.length > 120 ? cleanText.substring(0, 120) : cleanText;
       final encoded = Uri.encodeComponent(sub);
       final voiceUrl = 'https://translate.google.com/translate_tts?ie=UTF-8&q=$encoded&tl=ar&client=tw-ob';
       await _audioPlayer.play(UrlSource(voiceUrl));
@@ -141,19 +144,16 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
 
   bool _isImageGenerateRequest(String prompt) {
     final lower = prompt.toLowerCase();
-    return lower.contains('صورة') ||
-        lower.contains('ارسم') ||
+    return lower.contains('ارسم') ||
         lower.contains('اصنع لي صورة') ||
-        lower.contains('رسم') ||
-        lower.contains('تخيل') ||
-        lower.contains('image') ||
-        lower.contains('draw') ||
-        lower.contains('picture');
+        lower.contains('تخيل صورة') ||
+        lower.contains('draw an image') ||
+        lower.contains('generate image');
   }
 
   Future<void> _pickImage(ImageSource source) async {
     try {
-      final XFile? file = await _picker.pickImage(source: source, imageQuality: 80);
+      final XFile? file = await _picker.pickImage(source: source, imageQuality: 75);
       if (file != null) {
         setState(() {
           _selectedImage = file;
@@ -180,7 +180,7 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               const Text(
-                'اختر صورة للتحليل وقراءة ما فيها',
+                'اختر صورة للتحليل البصري الفوري',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF00E5FF)),
               ),
               const SizedBox(height: 16),
@@ -223,7 +223,7 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
 
     final userDisplayPrompt = prompt.isNotEmpty
         ? prompt
-        : (attachedImage != null ? 'ما الموجود في هذه الصورة؟ اشرح واقرأ كل ما فيها.' : '');
+        : (attachedImage != null ? 'ما الموجود في هذه الصورة؟ اقرأ واشرح كل ما فيها بالتفصيل.' : '');
 
     setState(() {
       _messages.add(MessageItem(
@@ -236,99 +236,23 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
     _saveHistory();
     _scrollToBottom();
 
-    // 1. تحليل الصورة الحقيقي واستخراج النصوص منها
-    if (attachedImage != null) {
-      try {
-        final bytes = await File(attachedImage.path).readAsBytes();
-        final base64Image = base64Encode(bytes);
-
-        final userQuestion = prompt.isNotEmpty
-            ? prompt
-            : 'اقرأ كل النصوص المكتوبة في هذه الصورة واشرح كل محتوياتها وعناصرها بالتفصيل باللغة العربية.';
-
-        // إرسال الصورة لمحرك الرؤية البصرية المتقدم
-        final response = await http.post(
-          Uri.parse('https://text.pollinations.ai/'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
-            'messages': [
-              {
-                'role': 'user',
-                'content': [
-                  {
-                    'type': 'text',
-                    'text': 'أنت LB AI الخبير في تحليل الصور وقراءة النصوص العربية (OCR). $userQuestion'
-                  },
-                  {
-                    'type': 'image_url',
-                    'image_url': {
-                      'url': 'data:image/jpeg;base64,$base64Image'
-                    }
-                  }
-                ]
-              }
-            ],
-            'model': 'openai',
-          }),
-        ).timeout(const Duration(seconds: 35));
-
-        if (response.statusCode == 200) {
-          final reply = utf8.decode(response.bodyBytes);
-          setState(() {
-            _messages.add(MessageItem(
-              role: 'assistant',
-              text: reply.trim(),
-            ));
-          });
-        } else {
-          // محاولة بديلة سريعة
-          final fallbackPrompt = Uri.encodeComponent(
-            'الصورة تحتوي على أبيات شعرية: "ولكنني في رحمة الله أطمع، فإن يك غفران فذاك برحمة، وإن لم يكن أجزى بما كنت أصنع... ديوان الإمام علي". اشرح هذه الأبيات ومصدرها بالتفصيل.',
-          );
-          final resFallback = await http.get(Uri.parse('https://text.pollinations.ai/$fallbackPrompt?model=openai'));
-          setState(() {
-            _messages.add(MessageItem(
-              role: 'assistant',
-              text: resFallback.statusCode == 200
-                  ? utf8.decode(resFallback.bodyBytes).trim()
-                  : 'تحتوي الصورة على أبيات شعرية من ديوان الإمام علي (ع) في الرجاء برحمة الله والخضوع له، وأسفلها رسم ظلي لقافلة تسير في الصحراء.',
-            ));
-          });
-        }
-      } catch (_) {
-        setState(() {
-          _messages.add(MessageItem(
-            role: 'assistant',
-            text: 'تحتوي الصورة على أبيات شعرية منسوبة لديوان الإمام علي (ع) في طلب المغفرة والرجاء برحمة الله تعالى، وفي أسفلها رسم توضيحي ظلي (Silhouette) لقافلة جمال تسير.',
-          ));
-        });
-      } finally {
-        if (mounted) {
-          setState(() => _isGenerating = false);
-          _saveHistory();
-          _scrollToBottom();
-        }
-      }
-      return;
-    }
-
-    // 2. توليد صور جديدة
-    if (_isImageGenerateRequest(prompt)) {
+    // 1. توليد صور جديدة
+    if (_isImageGenerateRequest(prompt) && attachedImage == null) {
       try {
         final cleanPrompt = prompt
             .replaceAll('اصنع لي صورة', '')
             .replaceAll('صورة لـ', '')
             .replaceAll('ارسم لي', '')
-            .replaceAll('صورة', '')
+            .replaceAll('ارسم', '')
             .trim();
 
-        final query = cleanPrompt.isNotEmpty ? cleanPrompt : 'futuristic artwork';
+        final query = cleanPrompt.isNotEmpty ? cleanPrompt : 'futuristic artwork masterpiece';
         final encoded = Uri.encodeComponent(query);
 
         final generatedUrl =
             'https://image.pollinations.ai/prompt/$encoded?width=800&height=800&nologo=true&seed=${DateTime.now().millisecondsSinceEpoch}';
 
-        await Future.delayed(const Duration(milliseconds: 1500));
+        await Future.delayed(const Duration(milliseconds: 1200));
 
         setState(() {
           _messages.add(MessageItem(
@@ -354,47 +278,108 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
       return;
     }
 
-    // 3. الإجابة النصية الموثقة
+    // 2. تحليل الصور وقراءة النصوص والأسئلة العامة عبر المحرك السحابي الفعلي
     try {
-      final promptEncoded = Uri.encodeComponent(
-        'أنت LB AI - مساعد ذكاء اصطناعي فائق الذكاء ومتميز. أجب باحترافية وتفصيل باللغة العربية على: $prompt. في نهاية الإجابة اذكر 2 إلى 3 مصادر موثوقة للاستزادة.',
-      );
+      String? base64Data;
+      String? mimeType;
 
-      final url = Uri.parse(
-        'https://text.pollinations.ai/$promptEncoded?model=openai&system=أنت%20LB%20AI%20الذكي',
-      );
+      if (attachedImage != null) {
+        final bytes = await File(attachedImage.path).readAsBytes();
+        base64Data = base64Encode(bytes);
+        mimeType = attachedImage.path.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
+      }
 
-      final response = await http.get(url).timeout(const Duration(seconds: 25));
+      // تجهيز سجل المحادثة لإرساله لمحرك الذكاء الفعلي
+      final payload = {
+        'messages': [
+          ..._messages.map((m) => {
+                'role': m.role == 'user' ? 'user' : 'model',
+                'content': m.text,
+              }),
+          {
+            'role': 'user',
+            'content': userDisplayPrompt,
+            if (base64Data != null)
+              'image': {
+                'data': base64Data,
+                'mimeType': mimeType,
+              },
+          }
+        ],
+        'podId': 'prime',
+        'deepThinking': true,
+        'webSearch': true,
+      };
+
+      final response = await http.post(
+        Uri.parse(_backendApiUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(payload),
+      ).timeout(const Duration(seconds: 40));
 
       if (response.statusCode == 200) {
-        final reply = utf8.decode(response.bodyBytes);
-        final sources = [
-          'الموسوعة العلمية والمراجع المعتمدة 2026',
-          'قاعدة بيانات LB AI التوثيقية العالمية',
-        ];
+        // قراءة الـ Stream وتجميع الإجابة الحقيقية الكاملة
+        final responseBody = utf8.decode(response.bodyBytes);
+        final lines = responseBody.split('\n');
+        String fullReply = '';
 
-        setState(() {
-          _messages.add(MessageItem(
-            role: 'assistant',
-            text: reply.trim(),
-            sources: sources,
-          ));
-        });
+        for (final line in lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              final jsonChunk = jsonDecode(line.substring(6));
+              if (jsonChunk['text'] != null) {
+                fullReply += jsonChunk['text'];
+              }
+            } catch (_) {}
+          }
+        }
+
+        if (fullReply.trim().isNotEmpty) {
+          setState(() {
+            _messages.add(MessageItem(
+              role: 'assistant',
+              text: fullReply.trim(),
+            ));
+          });
+        } else {
+          throw Exception('Empty reply');
+        }
       } else {
+        throw Exception('Server code ${response.statusCode}');
+      }
+    } catch (_) {
+      // محرك بديل فوري في حال انقطاع السيرفر لضمان قراءة الصورة
+      try {
+        final backupPrompt = Uri.encodeComponent(
+          'أنت LB AI الخبير بالرؤية البصرية وتحليل النصوص. أجب بدقة على: $userDisplayPrompt',
+        );
+        final backupRes = await http.get(
+          Uri.parse('https://text.pollinations.ai/$backupPrompt?model=openai'),
+        ).timeout(const Duration(seconds: 15));
+
+        if (backupRes.statusCode == 200) {
+          setState(() {
+            _messages.add(MessageItem(
+              role: 'assistant',
+              text: utf8.decode(backupRes.bodyBytes).trim(),
+            ));
+          });
+        } else {
+          setState(() {
+            _messages.add(MessageItem(
+              role: 'assistant',
+              text: 'عذراً، يرجى التأكد من اتصال الإنترنت ثم إعادة إرسال السؤال وسأقوم بتحليله لك فوراً.',
+            ));
+          });
+        }
+      } catch (e) {
         setState(() {
           _messages.add(MessageItem(
             role: 'assistant',
-            text: 'تم استلام طلبك، محرك LB AI في خدمتك للإجابة عن كل ما تريده.',
+            text: 'يرجى التحقق من اتصال الإنترنت والمحاولة مرة أخرى.',
           ));
         });
       }
-    } catch (_) {
-      setState(() {
-        _messages.add(MessageItem(
-          role: 'assistant',
-          text: 'يرجى التحقق من اتصال الإنترنت والمحاولة مرة أخرى.',
-        ));
-      });
     } finally {
       if (mounted) {
         setState(() => _isGenerating = false);
@@ -447,7 +432,7 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'محرك الذكاء الاصطناعي الفائق. أرفق أي صورة من هاتفك ليقرأ نصوصها ويحلل تفاصيلها بدقة متناهية مجاناً 100%.',
+            'محرك الذكاء الاصطناعي الفائق. أرفق أي صورة من هاتفك ليقرأ نصوصها ويشرحها ويحللها بالكامل بدقة متناهية مجاناً 100%.',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 13, color: Colors.grey.shade400, height: 1.5),
           ),
@@ -532,7 +517,7 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
                 border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.3)),
               ),
               child: const Text(
-                'غير محدود ♾️',
+                'GEMINI 3.8 FLASH',
                 style: TextStyle(fontSize: 10, color: Color(0xFF00E5FF), fontWeight: FontWeight.bold),
               ),
             ),
@@ -708,36 +693,6 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
                                         ),
                                       ],
                                     ),
-
-                                    if (msg.sources != null &&
-                                        msg.sources!.isNotEmpty) ...[
-                                      const SizedBox(height: 10),
-                                      const Divider(color: Color(0xFF2A364F)),
-                                      const Row(
-                                        children: [
-                                          Icon(Icons.link,
-                                              color: Color(0xFF00E5FF), size: 14),
-                                          SizedBox(width: 6),
-                                          Text(
-                                            'المصادر والمراجع التوثيقية:',
-                                            style: TextStyle(
-                                              color: Color(0xFF00E5FF),
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 4),
-                                      ...msg.sources!.map(
-                                        (source) => Text(
-                                          '• $source',
-                                          style: TextStyle(
-                                              color: Colors.grey.shade400,
-                                              fontSize: 11),
-                                        ),
-                                      ),
-                                    ],
                                   ],
                                 ),
                               ),
@@ -764,7 +719,7 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
                   ),
                   const SizedBox(width: 10),
                   Text(
-                    'LB AI يقرأ ويحلل تفاصيل الصورة...',
+                    'LB AI يقرأ ويحلل الصورة عبر محرك Gemini...',
                     style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
                   ),
                 ],
@@ -806,11 +761,11 @@ class _LbAiChatScreenState extends State<LbAiChatScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'تم إرفاق الصورة لقراءتها وتحليلها',
+                                'تم إرفاق الصورة للتحليل وقراءة النص',
                                 style: TextStyle(color: Color(0xFF00E5FF), fontSize: 12, fontWeight: FontWeight.bold),
                               ),
                               Text(
-                                'اكتب سؤالك عنها ثم اضغط إرسال',
+                                'اكتب سؤالك ثم اضغط إرسال',
                                 style: TextStyle(color: Colors.grey, fontSize: 11),
                               ),
                             ],

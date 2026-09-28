@@ -1,0 +1,45 @@
+name: Build LB AI Android App
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        channel: 'stable'
+
+    - name: Create Clean Android Project
+      run: flutter create . --platforms=android --org com.lbai.app
+
+    # حقن أذونات الإنترنت وقراءة الصور تلقائياً داخل AndroidManifest.xml
+    - name: Add Permissions to AndroidManifest
+      run: |
+        sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>' android/app/src/main/AndroidManifest.xml
+
+    - name: Get Dependencies
+      run: flutter pub get
+
+    - name: Build Android APK
+      run: flutter build apk --release
+
+    - name: Upload Release APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: LB-AI-App-APK
+        path: build/app/outputs/flutter-apk/app-release.apk

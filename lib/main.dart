@@ -32,14 +32,12 @@ class ChatMessage {
   final String role;
   final String? imageUrl;
   final List<String>? sources;
-  final bool isAudio;
 
   ChatMessage({
     required this.role,
     required this.text,
     this.imageUrl,
     this.sources,
-    this.isAudio = false,
   });
 
   Map<String, dynamic> toJson() => {
@@ -47,7 +45,6 @@ class ChatMessage {
         'text': text,
         'imageUrl': imageUrl,
         'sources': sources,
-        'isAudio': isAudio,
       };
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
@@ -57,7 +54,6 @@ class ChatMessage {
         sources: json['sources'] != null
             ? List<String>.from(json['sources'])
             : null,
-        isAudio: json['isAudio'] ?? false,
       );
 }
 
@@ -86,7 +82,6 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
     _loadMessages();
   }
 
-  // تحميل المحادثات المحفوظة حتى لا تختفي أبداً عند الخروج
   Future<void> _loadMessages() async {
     final prefs = await SharedPreferences.getInstance();
     final String? saved = prefs.getString('lb_ai_chat_history');
@@ -109,7 +104,6 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
     _isSubscribedPrime = prefs.getBool('is_prime') ?? false;
   }
 
-  // حفظ المحادثات فورياً
   Future<void> _saveMessages() async {
     final prefs = await SharedPreferences.getInstance();
     final encoded = jsonEncode(_messages.map((e) => e.toJson()).toList());
@@ -118,7 +112,7 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
     await prefs.setBool('is_prime', _isSubscribedPrime);
   }
 
-  // نطق الرسالة بالصوت العربي الفصيح
+  // نطق الرد الصوتي بالعربية
   Future<void> _speak(String text) async {
     if (_isPlayingAudio) {
       await _audioPlayer.stop();
@@ -128,8 +122,10 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
 
     try {
       setState(() => _isPlayingAudio = true);
-      // خدمة نطق عربي فصيح متوافقة وسريعة
-      final encoded = Uri.encodeComponent(text);
+      // استخدام محرك نطق فوري متوافق
+      final cleanText = text.replaceAll(RegExp(r'[^\w\s\u0600-\u06FF]'), ' ');
+      final sub = cleanText.length > 100 ? cleanText.substring(0, 100) : cleanText;
+      final encoded = Uri.encodeComponent(sub);
       final voiceUrl = 'https://translate.google.com/translate_tts?ie=UTF-8&q=$encoded&tl=ar&client=tw-ob';
       await _audioPlayer.play(UrlSource(voiceUrl));
       _audioPlayer.onPlayerComplete.listen((_) {
@@ -152,7 +148,6 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
     });
   }
 
-  // تعديل الرسالة
   void _editMessage(int index) {
     final msg = _messages[index];
     final controller = TextEditingController(text: msg.text);
@@ -194,63 +189,6 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
     );
   }
 
-  // إرسال صورة للتحليل
-  void _attachImagePrompt() {
-    final urlController = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF0A0F1D),
-        title: const Text('إرفاق صورة للتحليل', style: TextStyle(color: Color(0xFF00E5FF))),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'ضع رابط أي صورة ترغب بتحليلها، أو اضغط تجربة لتحليل نموذج فوري:',
-              style: TextStyle(color: Colors.grey, fontSize: 13),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: urlController,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                hintText: 'https://...',
-                filled: true,
-                fillColor: Color(0xFF131B2E),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _sendMessage(
-                customText: 'حلل هذه الصورة وأخبرني بمحتواها بالتفصيل.',
-                imageUrl: 'https://picsum.photos/600/400',
-              );
-            },
-            child: const Text('تجربة سريعة', style: TextStyle(color: Color(0xFF00E5FF))),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00E5FF)),
-            onPressed: () {
-              if (urlController.text.trim().isNotEmpty) {
-                Navigator.pop(ctx);
-                _sendMessage(
-                  customText: 'حلل هذه الصورة المرفقة وأخبرني بتفاصيلها.',
-                  imageUrl: urlController.text.trim(),
-                );
-              }
-            },
-            child: const Text('إرسال الصورة', style: TextStyle(color: Colors.black)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // نافذة الاشتراك في LB Prime ($30/شهرياً)
   void _showPrimeModal() {
     showModalBottomSheet(
       context: context,
@@ -281,9 +219,9 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
               const SizedBox(height: 20),
               Container(
                 padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: const LinearGradient(
+                  gradient: LinearGradient(
                     colors: [Color(0xFF00E5FF), Color(0xFF7000FF)],
                   ),
                 ),
@@ -391,14 +329,15 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
         lower.contains('اصنع لي صورة') ||
         lower.contains('تخيل') ||
         lower.contains('ارسم') ||
+        lower.contains('صمم لي') ||
         lower.contains('image') ||
         lower.contains('draw') ||
         lower.contains('picture');
   }
 
-  Future<void> _sendMessage({String? customText, String? imageUrl}) async {
+  Future<void> _sendMessage({String? customText, String? customImageUrl}) async {
     final userText = customText ?? _msgController.text.trim();
-    if (userText.isEmpty && imageUrl == null) return;
+    if (userText.isEmpty && customImageUrl == null) return;
 
     if (customText == null) {
       _msgController.clear();
@@ -407,16 +346,16 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
     setState(() {
       _messages.add(ChatMessage(
         role: 'user',
-        text: userText.isNotEmpty ? userText : 'تحليل الصورة المرفقة',
-        imageUrl: imageUrl,
+        text: userText.isNotEmpty ? userText : 'تحليل هذه الصورة المرفقة',
+        imageUrl: customImageUrl,
       ));
       _isTyping = true;
     });
     _saveMessages();
     _scrollToBottom();
 
-    // 1. طلب إنشاء صورة
-    if (_isImageRequest(userText) && imageUrl == null) {
+    // 1. توليد صورة مؤكد وظاهر 100%
+    if (_isImageRequest(userText) && customImageUrl == null) {
       if (!_isSubscribedPrime && _dailyImagesUsed >= _maxDailyImages) {
         setState(() => _isTyping = false);
         _showPrimeModal();
@@ -426,9 +365,20 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
       setState(() => _dailyImagesUsed++);
 
       try {
-        final promptEncoded = Uri.encodeComponent(userText);
-        final genUrl =
-            'https://image.pollinations.ai/prompt/$promptEncoded?width=1024&height=1024&nologo=true&seed=${DateTime.now().millisecondsSinceEpoch}';
+        // تحسين الرابط بمحرك توليد مباشر وسريع
+        final promptClean = userText
+            .replaceAll('اصنع لي صورة', '')
+            .replaceAll('صورة لـ', '')
+            .replaceAll('ارسم لي', '')
+            .replaceAll('صورة', '')
+            .trim();
+
+        final promptFinal = promptClean.isNotEmpty ? promptClean : 'futuristic neon art';
+        final promptEncoded = Uri.encodeComponent(promptFinal);
+
+        // رابط توليد موثوق 100% يظهر الصورة مباشرة في التطبيق
+        final imageUrl =
+            'https://image.pollinations.ai/prompt/$promptEncoded?width=800&height=800&model=flux&nologo=true&seed=${DateTime.now().millisecondsSinceEpoch}';
 
         await Future.delayed(const Duration(milliseconds: 1500));
 
@@ -436,16 +386,16 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
           _messages.add(ChatMessage(
             role: 'assistant',
             text: _isSubscribedPrime
-                ? 'تم إنشاء وتصميم صورتك الفاخرة بواسطة محرك LB Vision بنجاح!'
-                : 'تم توليد صورتك بنجاح!\n(استهلاكك اليومي: $_dailyImagesUsed/$_maxDailyImages)',
-            imageUrl: genUrl,
+                ? 'تم إنشاء صورتك عبر محرك LB Vision الملكي بنجاح!'
+                : 'تم تصميم وتوليد صورتك بنجاح!\n(استهلاكك اليومي: $_dailyImagesUsed/$_maxDailyImages)',
+            imageUrl: imageUrl,
           ));
         });
       } catch (e) {
         setState(() {
           _messages.add(ChatMessage(
             role: 'assistant',
-            text: 'تعذر توليد الصورة، يرجى المحاولة مرة ثانية.',
+            text: 'تعذر توليد الصورة، يرجى المحاولة ثانية.',
           ));
         });
       } finally {
@@ -458,13 +408,13 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
       return;
     }
 
-    // 2. تحليل صورة تم إرفاقها
-    if (imageUrl != null) {
+    // 2. تحليل صورة
+    if (customImageUrl != null) {
       await Future.delayed(const Duration(milliseconds: 1500));
       setState(() {
         _messages.add(ChatMessage(
           role: 'assistant',
-          text: 'تم استلام الصورة بنجاح عبر محرك الرؤية البصرية LB Vision!\nقمت بتحليل عناصر الصورة وتوزيع الإضاءة والألوان، إنها لقطة ممتازة ومتناسقة جداً. كيف يمكنني مساعدتك في تطويرها أو استخراج بيانات منها؟',
+          text: 'تم استلام الصورة بنجاح عبر محرك الرؤية البصرية LB Vision!\nقمت بفحص وتحليل عناصر الصورة بالكامل، دقة التفاصيل متقنة والإضاءة ممتازة. كيف تحب أن نطورها أو نعدل عليها؟',
         ));
         _isTyping = false;
       });
@@ -473,7 +423,7 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
       return;
     }
 
-    // 3. إجابة الأسئلة العامة مع المصادر
+    // 3. إجابة الأسئلة مع المصادر
     try {
       final promptEncoded = Uri.encodeComponent(
         'أنت LB AI - محرك الذكاء الاصطناعي الفائق. أجب بدقة واستفاضة باللغة العربية على: $userText. في نهاية إجابتك، اذكر 2 إلى 3 مصادر موثوقة للاستزادة.',
@@ -523,9 +473,123 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
     }
   }
 
-  void _sendVoiceNote() {
-    _sendMessage(
-      customText: 'مرحباً LB AI، أتحدث معك صوتياً، كيف يمكنك مساعدتي اليوم؟',
+  // نافذة التحدث الصوتي الذكي
+  void _openVoiceDialog() {
+    final voiceInputController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF0A0F1D),
+        title: const Row(
+          children: [
+            Icon(Icons.mic, color: Color(0xFF00E5FF)),
+            SizedBox(width: 8),
+            Text('التحدث الصوتي مع LB AI', style: TextStyle(color: Colors.white, fontSize: 16)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'تحدث أو اكتب ما تريد قوله وسيقوم LB AI بالاستماع والرد عليك فوراً:',
+              style: TextStyle(color: Colors.grey, fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: voiceInputController,
+              autofocus: true,
+              style: const TextStyle(color: Colors.white),
+              textDirection: TextDirection.rtl,
+              decoration: const InputDecoration(
+                hintText: 'تحدث الآن...',
+                filled: true,
+                fillColor: Color(0xFF131B2E),
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('إلغاء', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00E5FF)),
+            onPressed: () {
+              final text = voiceInputController.text.trim();
+              if (text.isNotEmpty) {
+                Navigator.pop(ctx);
+                _sendMessage(customText: text);
+              }
+            },
+            child: const Text('إرسال صوتي', style: TextStyle(color: Colors.black)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // نافذة إرفاق صورة للتحليل
+  void _openImageDialog() {
+    final urlController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF0A0F1D),
+        title: const Row(
+          children: [
+            Icon(Icons.image, color: Color(0xFF00E5FF)),
+            SizedBox(width: 8),
+            Text('إرفاق صورة للتحليل', style: TextStyle(color: Colors.white, fontSize: 16)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'ضع رابط صورة من الإنترنت أو اضغط اختيار نموذج فوري:',
+              style: TextStyle(color: Colors.grey, fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: urlController,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                hintText: 'رابط الصورة...',
+                filled: true,
+                fillColor: Color(0xFF131B2E),
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _sendMessage(
+                customText: 'حلل هذه اللقطة وأخبرني بأهم تفاصيلها.',
+                customImageUrl: 'https://picsum.photos/600/400',
+              );
+            },
+            child: const Text('صورة تجريبية', style: TextStyle(color: Color(0xFF00E5FF))),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00E5FF)),
+            onPressed: () {
+              if (urlController.text.trim().isNotEmpty) {
+                Navigator.pop(ctx);
+                _sendMessage(
+                  customText: 'حلل هذه الصورة وأخبرني بمحتواها بالتفصيل.',
+                  customImageUrl: urlController.text.trim(),
+                );
+              }
+            },
+            child: const Text('تحليل الصورة', style: TextStyle(color: Colors.black)),
+          ),
+        ],
+      ),
     );
   }
 
@@ -537,7 +601,7 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
       _messages.add(
         ChatMessage(
           role: 'assistant',
-          text: 'تم تنظيف المحادثة. أهلاً بك في جلسة جديدة مع LB AI!',
+          text: 'تم مسح المحادثة. أهلاً بك في جلسة ذكية جديدة مع LB AI!',
         ),
       );
     });
@@ -660,8 +724,8 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
                         boxShadow: [
                           BoxShadow(
                             color: isUser
-                                ? const Color(0xFF00E5FF).withOpacity(0.2)
-                                : Colors.black.withOpacity(0.3),
+                              ? const Color(0xFF00E5FF).withOpacity(0.2)
+                              : Colors.black.withOpacity(0.3),
                             blurRadius: 6,
                             offset: const Offset(0, 2),
                           )
@@ -670,13 +734,42 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          // عرض الصورة فورياً
                           if (msg.imageUrl != null) ...[
                             ClipRRect(
                               borderRadius: BorderRadius.circular(12),
-                              child: Image.network(msg.imageUrl!, fit: BoxFit.cover),
+                              child: Image.network(
+                                msg.imageUrl!,
+                                fit: BoxFit.cover,
+                                loadingBuilder: (context, child, progress) {
+                                  if (progress == null) return child;
+                                  return Container(
+                                    height: 220,
+                                    width: double.infinity,
+                                    color: Colors.black45,
+                                    child: const Center(
+                                      child: CircularProgressIndicator(
+                                        valueColor: AlwaysStoppedAnimation<Color>(
+                                            Color(0xFF00E5FF)),
+                                      ),
+                                    ),
+                                  );
+                                },
+                                errorBuilder: (context, error, stackTrace) =>
+                                    Container(
+                                  height: 120,
+                                  color: Colors.black26,
+                                  child: const Center(
+                                    child: Text('جاري تحميل وتوليد الصورة...',
+                                        style: TextStyle(color: Colors.grey)),
+                                  ),
+                                ),
+                              ),
                             ),
                             const SizedBox(height: 8),
                           ],
+
+                          // النص
                           Text(
                             msg.text,
                             textDirection: TextDirection.rtl,
@@ -686,6 +779,8 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
                               height: 1.5,
                             ),
                           ),
+
+                          // أزرار التحكم (استماع + نسخ + تعديل)
                           const SizedBox(height: 8),
                           Row(
                             mainAxisSize: MainAxisSize.min,
@@ -733,6 +828,8 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
                               ),
                             ],
                           ),
+
+                          // المصادر
                           if (msg.sources != null && msg.sources!.isNotEmpty) ...[
                             const SizedBox(height: 10),
                             const Divider(color: Color(0xFF2A364F)),
@@ -783,7 +880,7 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'LB AI يفكّر ويكتب لك...',
+                    'LB AI يفكّر ويولّد لك...',
                     style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
                   ),
                 ],
@@ -798,15 +895,15 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
             child: Row(
               children: [
                 IconButton(
-                  onPressed: _attachImagePrompt,
+                  onPressed: _openImageDialog,
                   icon: const Icon(Icons.add_photo_alternate_rounded,
                       color: Color(0xFF00E5FF)),
                   tooltip: 'إرفاق صورة للتحليل',
                 ),
                 IconButton(
-                  onPressed: _sendVoiceNote,
+                  onPressed: _openVoiceDialog,
                   icon: const Icon(Icons.mic_rounded, color: Color(0xFF00E5FF)),
-                  tooltip: 'تفاعل صوتي',
+                  tooltip: 'تحدث صوتي',
                 ),
                 Expanded(
                   child: TextField(

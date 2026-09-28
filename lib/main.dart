@@ -22,7 +22,7 @@ class LbAiApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFF04060C),
         primaryColor: const Color(0xFF00E5FF),
       ),
-      home: const LbAiHomeScreen(),
+      home: const LbAiChatScreen(),
     );
   }
 }
@@ -32,14 +32,12 @@ class MessageItem {
   final String role;
   final String? imageUrl;
   final List<String>? sources;
-  final String? podName;
 
   MessageItem({
     required this.role,
     required this.text,
     this.imageUrl,
     this.sources,
-    this.podName,
   });
 
   Map<String, dynamic> toJson() => {
@@ -47,7 +45,6 @@ class MessageItem {
         'text': text,
         'imageUrl': imageUrl,
         'sources': sources,
-        'podName': podName,
       };
 
   factory MessageItem.fromJson(Map<String, dynamic> json) => MessageItem(
@@ -57,18 +54,17 @@ class MessageItem {
         sources: json['sources'] != null
             ? List<String>.from(json['sources'])
             : null,
-        podName: json['podName'],
       );
 }
 
-class LbAiHomeScreen extends StatefulWidget {
-  const LbAiHomeScreen({super.key});
+class LbAiChatScreen extends StatefulWidget {
+  const LbAiChatScreen({super.key});
 
   @override
-  State<LbAiHomeScreen> createState() => _LbAiHomeScreenState();
+  State<LbAiChatScreen> createState() => _LbAiChatScreenState();
 }
 
-class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
+class _LbAiChatScreenState extends State<LbAiChatScreen> {
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final AudioPlayer _audioPlayer = AudioPlayer();
@@ -77,24 +73,9 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
   bool _isGenerating = false;
   bool _isAudioPlaying = false;
 
-  // إعدادات الـ Preview المتطورة
-  String _selectedTab = 'chat'; // chat, artifacts, mindmap, prompt, debate
-  String _selectedPod = 'LB Prime';
-  bool _deepThinking = false;
-  bool _webSearch = false;
-
-  // 8 صور مجانية يومياً
   int _dailyImagesCount = 0;
   final int _maxDailyImages = 8;
   bool _isPrimeUser = false;
-
-  final List<String> _pods = [
-    'LB Prime',
-    'المهندس المعماري',
-    'المبتكر الاستراتيجي',
-    'الباحث الأكاديمي',
-    'خبير البيان والضاد',
-  ];
 
   @override
   void initState() {
@@ -104,7 +85,7 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
 
   Future<void> _loadHistory() async {
     final prefs = await SharedPreferences.getInstance();
-    final String? saved = prefs.getString('lb_ai_preview_history');
+    final String? saved = prefs.getString('lb_ai_chat_history');
     if (saved != null) {
       final List decoded = jsonDecode(saved);
       setState(() {
@@ -119,7 +100,7 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
   Future<void> _saveHistory() async {
     final prefs = await SharedPreferences.getInstance();
     final encoded = jsonEncode(_messages.map((e) => e.toJson()).toList());
-    await prefs.setString('lb_ai_preview_history', encoded);
+    await prefs.setString('lb_ai_chat_history', encoded);
     await prefs.setInt('lb_ai_images_count', _dailyImagesCount);
     await prefs.setBool('lb_ai_is_prime', _isPrimeUser);
   }
@@ -205,7 +186,7 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'لقد استهلكت رصيدك اليومي المجاني ($_maxDailyImages/$_maxDailyImages صور لهذا اليوم).\nتتجدد الصور المجانية غداً تلقائياً، أو اشترك الآن لتوليد غير محدود وسرعة استجابة قصوى.',
+              'لقد استهلكت رصيدك اليومي المجاني ($_maxDailyImages/$_maxDailyImages صور لهذا اليوم).\nتتجدد الصور المجانية غداً تلقائياً، أو اشترك الآن لإنشاء صور غير محدودة وسرعة استجابة قصوى.',
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.grey.shade400, fontSize: 13),
             ),
@@ -224,7 +205,7 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'عضوية Prime الملكية',
+                        'عضوية LB Prime الملكية',
                         style: TextStyle(
                             fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF00E5FF)),
                       ),
@@ -302,7 +283,7 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
     _saveHistory();
     _scrollToBottom();
 
-    // 1. نظام إنشاء الصور (8 صور يومياً)
+    // توليد الصور (8 صور يومياً)
     if (_isImageIntent(prompt) && customImageUrl == null) {
       if (!_isPrimeUser && _dailyImagesCount >= _maxDailyImages) {
         setState(() => _isGenerating = false);
@@ -335,7 +316,6 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
                 ? 'إليك الصورة التي طلبتها بدقة فائقة عبر محرك LB Vision الملكي:'
                 : 'تم إنشاء صورتك بنجاح!\n(استهلاكك اليومي: $_dailyImagesCount/$_maxDailyImages صور - تتجدد كل 24 ساعة)',
             imageUrl: generatedUrl,
-            podName: _selectedPod,
           ));
         });
       } catch (_) {
@@ -343,7 +323,6 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
           _messages.add(MessageItem(
             role: 'assistant',
             text: 'تعذر إنشاء الصورة حالياً، يرجى المحاولة ثانية.',
-            podName: _selectedPod,
           ));
         });
       } finally {
@@ -356,14 +335,13 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
       return;
     }
 
-    // 2. إرفاق صورة للتحليل
+    // إرفاق صورة للتحليل
     if (customImageUrl != null) {
       await Future.delayed(const Duration(milliseconds: 1200));
       setState(() {
         _messages.add(MessageItem(
           role: 'assistant',
           text: 'تم استلام الصورة وتحليل تفاصيلها بنجاح عبر محرك الرؤية البصرية LB Vision. توزيع الإضاءة والألوان متناسق واحترافي، كيف يمكنني مساعدتك فيها؟',
-          podName: _selectedPod,
         ));
         _isGenerating = false;
       });
@@ -372,10 +350,10 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
       return;
     }
 
-    // 3. الإجابة الذكية مع المصادر الموثقة
+    // الإجابة الذكية مع المصادر
     try {
       final promptEncoded = Uri.encodeComponent(
-        'أنت $_selectedPod في نظام LB AI الذكي. أجب باحترافية وتفصيل باللغة العربية على: $prompt. في نهاية الإجابة اذكر 2 إلى 3 مصادر موثوقة للاستزادة.',
+        'أنت LB AI - مساعد ذكاء اصطناعي فائق الذكاء ومتميز. أجب باحترافية وتفصيل باللغة العربية على: $prompt. في نهاية الإجابة اذكر 2 إلى 3 مصادر موثوقة للاستزادة.',
       );
 
       final url = Uri.parse(
@@ -396,7 +374,6 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
             role: 'assistant',
             text: reply.trim(),
             sources: sources,
-            podName: _selectedPod,
           ));
         });
       } else {
@@ -404,7 +381,6 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
           _messages.add(MessageItem(
             role: 'assistant',
             text: 'تم استلام طلبك، محرك LB AI في خدمتك للإجابة عن كل ما تريده.',
-            podName: _selectedPod,
           ));
         });
       }
@@ -413,7 +389,6 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
         _messages.add(MessageItem(
           role: 'assistant',
           text: 'يرجى التحقق من اتصال الإنترنت والمحاولة مرة أخرى.',
-          podName: _selectedPod,
         ));
       });
     } finally {
@@ -519,20 +494,18 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
 
   void _clearChat() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('lb_ai_preview_history');
+    await prefs.remove('lb_ai_chat_history');
     setState(() {
       _messages.clear();
     });
   }
 
-  // بناء واجهة الهيرو الترحيبية للـ Preview
   Widget _buildEmptyState() {
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       child: Column(
         children: [
           const SizedBox(height: 20),
-          // الشعار المتوهج ثلاثي الأبعاد مثل الـ Preview
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -566,56 +539,6 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
             style: TextStyle(fontSize: 13, color: Colors.grey.shade400, height: 1.5),
           ),
           const SizedBox(height: 24),
-
-          // بطاقة الوكيل النشط
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: const Color(0xFF0B1222),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.3)),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF00E5FF).withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(Icons.auto_awesome, color: Color(0xFF00E5FF), size: 18),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _selectedPod,
-                        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'النواة المركزية للذكاء الشامل والمحادثة المتقدمة',
-                        style: TextStyle(color: Colors.grey.shade400, fontSize: 11),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // بطاقات الأوامر السريعة
-          const Align(
-            alignment: Alignment.centerRight,
-            child: Text(
-              'اقتراحات سريعة للبدء:',
-              style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold),
-            ),
-          ),
-          const SizedBox(height: 10),
           _buildQuickCard('ارسم لي صقر عربي يطير في غروب الشمس فوق دبي', Icons.brush_rounded),
           _buildQuickCard('صمم لي صفحة هبوط لمشروع ناشئ بتقنيات حديثة', Icons.code_rounded),
           _buildQuickCard('قارن بين نماذج الذكاء الاصطناعي مع إبراز الفروقات', Icons.analytics_outlined),
@@ -626,9 +549,7 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
 
   Widget _buildQuickCard(String text, IconData icon) {
     return InkWell(
-      onTap: () {
-        _handleSend(prefillText: text);
-      },
+      onTap: () => _handleSend(prefillText: text),
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -697,22 +618,9 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
                 borderRadius: BorderRadius.circular(6),
                 border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.3)),
               ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 6,
-                    height: 6,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF00E5FF),
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  const Text(
-                    'GEMINI 3.8 FLASH',
-                    style: TextStyle(fontSize: 9, color: Color(0xFF00E5FF), fontWeight: FontWeight.bold),
-                  ),
-                ],
+              child: Text(
+                _isPrimeUser ? 'PRIME ⭐' : 'الصور: $_dailyImagesCount/$_maxDailyImages',
+                style: const TextStyle(fontSize: 10, color: Color(0xFF00E5FF), fontWeight: FontWeight.bold),
               ),
             ),
           ],
@@ -732,123 +640,6 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
       ),
       body: Column(
         children: [
-          // شريط تبويبات الـ Preview العلوية
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            color: const Color(0xFF070B16),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _buildTabChip('chat', 'المحادثة المعرفية', Icons.chat_bubble_outline),
-                  _buildTabChip('artifacts', 'استوديو الأكواد', Icons.code),
-                  _buildTabChip('mindmap', 'الخرائط الذهنية', Icons.account_tree_outlined),
-                  _buildTabChip('prompt', 'محسن الأوامر', Icons.auto_awesome),
-                  _buildTabChip('debate', 'مناظرة الآراء', Icons.balance),
-                ],
-              ),
-            ),
-          ),
-
-          // شريط اختيار الوكلاء وأزرار التفكير العميق والبحث
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: const BoxDecoration(
-              color: Color(0xFF090E1C),
-              border: Border(bottom: BorderSide(color: Color(0xFF1E293B))),
-            ),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  const Text('الوكيل: ', style: TextStyle(color: Color(0xFF00E5FF), fontSize: 11, fontWeight: FontWeight.bold)),
-                  ..._pods.map((pod) {
-                    final isSelected = pod == _selectedPod;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 6),
-                      child: InkWell(
-                        onTap: () => setState(() => _selectedPod = pod),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: isSelected ? const Color(0xFF00E5FF).withOpacity(0.2) : Colors.transparent,
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(
-                              color: isSelected ? const Color(0xFF00E5FF) : Colors.grey.shade800,
-                            ),
-                          ),
-                          child: Text(
-                            pod,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: isSelected ? const Color(0xFF00E5FF) : Colors.grey.shade400,
-                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  }),
-                  const SizedBox(width: 8),
-                  // زر تفكير عميق
-                  InkWell(
-                    onTap: () => setState(() => _deepThinking = !_deepThinking),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: _deepThinking ? Colors.purple.withOpacity(0.3) : Colors.transparent,
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: _deepThinking ? Colors.purpleAccent : Colors.grey.shade800),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.psychology, size: 13, color: _deepThinking ? Colors.purpleAccent : Colors.grey),
-                          const SizedBox(width: 4),
-                          Text('تفكير عميق', style: TextStyle(fontSize: 10, color: _deepThinking ? Colors.purpleAccent : Colors.grey)),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  // زر بحث الويب
-                  InkWell(
-                    onTap: () => setState(() => _webSearch = !_webSearch),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: _webSearch ? Colors.emerald.withOpacity(0.3) : Colors.transparent,
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: _webSearch ? Colors.greenAccent : Colors.grey.shade800),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.public, size: 13, color: _webSearch ? Colors.greenAccent : Colors.grey),
-                          const SizedBox(width: 4),
-                          Text('بحث الويب', style: TextStyle(fontSize: 10, color: _webSearch ? Colors.greenAccent : Colors.grey)),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  // عداد الصور
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF00E5FF).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.3)),
-                    ),
-                    child: Text(
-                      _isPrimeUser ? 'PRIME ⭐' : 'الصور: $_dailyImagesCount/$_maxDailyImages',
-                      style: const TextStyle(fontSize: 10, color: Color(0xFF00E5FF), fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // منطقة الرسائل
           Expanded(
             child: _messages.isEmpty
                 ? _buildEmptyState()
@@ -912,31 +703,6 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    if (!isUser && msg.podName != null) ...[
-                                      Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Text(
-                                            msg.podName!,
-                                            style: const TextStyle(
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.bold,
-                                              color: Color(0xFF00E5FF),
-                                            ),
-                                          ),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFF00E5FF).withOpacity(0.1),
-                                              borderRadius: BorderRadius.circular(4),
-                                            ),
-                                            child: const Text('CORE', style: TextStyle(fontSize: 8, color: Color(0xFF00E5FF))),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 6),
-                                    ],
-
                                     if (msg.imageUrl != null) ...[
                                       ClipRRect(
                                         borderRadius: BorderRadius.circular(14),
@@ -985,7 +751,8 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
                                                   horizontal: 8, vertical: 4),
                                               decoration: BoxDecoration(
                                                 color: const Color(0xFF00E5FF).withOpacity(0.15),
-                                                borderRadius: BorderRadius.circular(8),
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
                                               ),
                                               child: const Row(
                                                 children: [
@@ -1076,14 +843,13 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
                   ),
                   const SizedBox(width: 10),
                   Text(
-                    '$_selectedPod يفكّر ويكتب لك...',
+                    'LB AI يفكّر ويكتب لك...',
                     style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
                   ),
                 ],
               ),
             ),
 
-          // شريط الإدخال
           Container(
             padding: const EdgeInsets.all(12),
             decoration: const BoxDecoration(
@@ -1108,7 +874,7 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
                     style: const TextStyle(color: Colors.white, fontSize: 14),
                     textDirection: TextDirection.rtl,
                     decoration: InputDecoration(
-                      hintText: 'اسأل $_selectedPod عن أي شيء...',
+                      hintText: 'اسأل LB AI عن أي شيء، أو اطلب صورة...',
                       hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 13),
                       filled: true,
                       fillColor: const Color(0xFF131B2E),
@@ -1137,47 +903,6 @@ class _LbAiHomeScreenState extends State<LbAiHomeScreen> {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildTabChip(String id, String label, IconData icon) {
-    final isSelected = _selectedTab == id;
-    return Padding(
-      padding: const EdgeInsets.only(right: 6),
-      child: InkWell(
-        onTap: () {
-          setState(() => _selectedTab = id);
-          if (id != 'chat') {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('تم تفعيل وضع: $label بنجاح!'), duration: const Duration(seconds: 1)),
-            );
-          }
-        },
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-          decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFF00E5FF).withOpacity(0.2) : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: isSelected ? const Color(0xFF00E5FF) : Colors.transparent,
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(icon, size: 13, color: isSelected ? const Color(0xFF00E5FF) : Colors.grey),
-              const SizedBox(width: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: isSelected ? const Color(0xFF00E5FF) : Colors.grey,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
